@@ -463,13 +463,13 @@ class Causeway_Importer {
             self::assign_listing_terms($post_id, $item['amenities'], 'listings-amenities');
             self::assign_listing_terms($post_id, $item['campaigns'], 'listing-campaigns');
 
-            // TODO - Assign Seasons
-            // $season_ids = [];
-            // foreach ($item['seasons'] ?? [] as $season) {
-            //     $term = get_term_by('name', $season, 'listings-seasons');
-            //     if ($term) $season_ids[] = $term->term_id;
-            // }
-            // wp_set_object_terms($post_id, $season_ids, 'listings-seasons');
+            // Assign Seasons
+            $season_ids = [];
+            foreach ($item['seasons'] ?? [] as $season) {
+                $term = get_term_by('name', $season, 'listings-seasons');
+                if ($term) $season_ids[] = $term->term_id;
+            }
+            wp_set_object_terms($post_id, $season_ids, 'listings-seasons');
 
             // Assign Locations (coordinates and details)
             foreach ($item['locations'] ?? [] as $location) {
