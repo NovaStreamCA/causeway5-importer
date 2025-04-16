@@ -20,36 +20,48 @@ add_action('admin_init', function () {
 function causeway_register_listing_post_type() {
     register_post_type('listing', [
         'labels' => [
-            'name' => __('Listings'),
-            'singular_name' => __('Listing')
+            'name' => __('Causeway'),
+            'singular_name' => __('Listing'),
+            'add_new' => __('Add Listing'),
+            'add_new_item' => __('Add New Listing'),
+            'edit_item' => __('Edit Listing'),
+            'new_item' => __('New Listing'),
+            'view_item' => __('View Listing'),
+            'search_items' => __('Search Listings'),
+            'not_found' => __('No listings found'),
+            'not_found_in_trash' => __('No listings found in trash'),
+            'all_items' => __('All Listings'),
+            'menu_name' => __('Causeway'),
+            'name_admin_bar' => __('Causeway'),
         ],
         'public' => true,
         'has_archive' => true,
         'show_in_rest' => true,
         'supports' => ['title', 'editor', 'excerpt', 'thumbnail'],
         'rewrite' => ['slug' => 'listings'],
+        'menu_icon' => 'dashicons-admin-site-alt3', // You can swap this with any Dashicon or SVG
     ]);
 }
 add_action('init', 'causeway_register_listing_post_type');
 
 function causeway_register_taxonomies() {
     $taxonomies = [
-        'listing-type' => 'Type',
-        'listing-campaigns' => 'Campaign',
-        'listing-areas' => 'Area',
-        'listing-counties' => 'County',
-        'listing-communities' => 'Community',
-        'listing-regions' => 'Region',
-        'listings-category' => 'Category',
-        'listings-seasons' => 'Season',
-        'listings-amenities' => 'Amenity',
+        'listing-type' => ['singular' => 'Type', 'plural' => 'Types'],
+        'listing-campaigns' => ['singular' => 'Campaign', 'plural' => 'Campaigns'],
+        'listing-areas' => ['singular' => 'Area', 'plural' => 'Areas'],
+        'listing-counties' => ['singular' => 'County', 'plural' => 'Counties'],
+        'listing-communities' => ['singular' => 'Community', 'plural' => 'Communities'],
+        'listing-regions' => ['singular' => 'Region', 'plural' => 'Regions'],
+        'listings-category' => ['singular' => 'Category', 'plural' => 'Categories'],
+        'listings-seasons' => ['singular' => 'Season', 'plural' => 'Seasons'],
+        'listings-amenities' => ['singular' => 'Amenity', 'plural' => 'Amenities'],
     ];
 
-    foreach ($taxonomies as $slug => $name) {
+    foreach ($taxonomies as $slug => $labels) {
         register_taxonomy($slug, 'listing', [
             'labels' => [
-                'name' => __($name . 's'),
-                'singular_name' => __($name),
+                'name' => __($labels['plural']),
+                'singular_name' => __($labels['singular']),
             ],
             'public' => true,
             'hierarchical' => true,
@@ -59,12 +71,6 @@ function causeway_register_taxonomies() {
     }
 }
 add_action('init', 'causeway_register_taxonomies');
-
-// Optional: Load ACF field group setup here (if not using GUI export)
-
-// Optional: Create admin menu for manual import
-
-// Optional: WP CLI command to trigger import (for cron or dev)
 
 add_action('admin_post_causeway_manual_import', function () {
     if (!current_user_can('manage_options')) {
