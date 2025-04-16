@@ -166,7 +166,6 @@ class Causeway_Importer {
 
             // Save ACF fields
             if (isset($term_id)) {
-                update_field('icon', $icon, 'listings-category_' . $term_id);
                 update_field('causeway_id', $causeway_id, 'listings-category_' . $term_id);
 
                 $type_term = self::get_term_by_causeway_id($type_id, 'listing-type');

@@ -44,12 +44,6 @@ function causeway_register_acf_fields() {
             'title' => 'Listing Category Meta',
             'fields' => [
                 [
-                    'key' => 'field_category_icon',
-                    'label' => 'Icon',
-                    'name' => 'icon',
-                    'type' => 'text',
-                ],
-                [
                     'key' => 'field_category_type',
                     'label' => 'Listing Type',
                     'name' => 'listing_type',
