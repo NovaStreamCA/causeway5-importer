@@ -329,16 +329,6 @@ function causeway_register_acf_fields() {
                 ['key' => 'field_activated_at', 'label' => 'Activated At', 'name' => 'activated_at', 'type' => 'date_picker'],
                 ['key' => 'field_expired_at', 'label' => 'Expired At', 'name' => 'expired_at', 'type' => 'date_picker'],
                 [
-                    'key' => 'field_seasons',
-                    'label' => 'Seasons',
-                    'name' => 'seasons',
-                    'type' => 'taxonomy',
-                    'taxonomy' => 'listings-seasons',
-                    'field_type' => 'multi_select',
-                    'return_format' => 'id',
-                    'multiple' => true,
-                ],
-                [
                     'key' => 'field_websites',
                     'label' => 'Websites',
                     'name' => 'websites',
