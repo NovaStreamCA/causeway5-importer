@@ -79,12 +79,6 @@ function causeway_register_acf_fields() {
             'title' => 'Amenity Details',
             'fields' => [
                 [
-                    'key' => 'field_amenity_icon',
-                    'label' => 'Icon',
-                    'name' => 'icon',
-                    'type' => 'text',
-                ],
-                [
                     'key' => 'field_amenity_causeway_id',
                     'label' => 'Causeway ID',
                     'name' => 'causeway_id',
