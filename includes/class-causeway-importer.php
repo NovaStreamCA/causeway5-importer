@@ -538,25 +538,25 @@ class Causeway_Importer {
             // error_log("✅ Added Listing: " . $post_title . " (ID: $post_id)");
         }
 
-        error_log("Assigning related listings...");
-        // Assign related listings
-        foreach ($listings as $item) {
-            $post_id = self::$listing_map[$item['slug']] ?? null;
-            if (!$post_id) continue;
+        // error_log("Assigning related listings...");
+        // TODO Assign related listings (matt not currently sending them via api)
+        // foreach ($listings as $item) {
+        //     $post_id = self::$listing_map[$item['slug']] ?? null;
+        //     if (!$post_id) continue;
 
-            $related_ids = [];
-            foreach ($item['related'] ?? [] as $related) {
-                $related_slug = $related['slug'] ?? null;
-                $related_post_id = self::$listing_map[$related_slug] ?? null;
-                if ($related_post_id) {
-                    $related_ids[] = $related_post_id;
-                }
-            }
+        //     $related_ids = [];
+        //     foreach ($item['related'] ?? [] as $related) {
+        //         $related_slug = $related['slug'] ?? null;
+        //         $related_post_id = self::$listing_map[$related_slug] ?? null;
+        //         if ($related_post_id) {
+        //             $related_ids[] = $related_post_id;
+        //         }
+        //     }
 
-            if (!empty($related_ids)) {
-                update_field('related_listings', $related_ids, $post_id);
-            }
-        }
+        //     if (!empty($related_ids)) {
+        //         update_field('related_listings', $related_ids, $post_id);
+        //     }
+        // }
 
         error_log('✅ Listings imported. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
     }
