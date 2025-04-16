@@ -62,7 +62,8 @@ class Causeway_Importer {
         ]);
 
         if (is_wp_error($response)) {
-            error_log('ERROR', $response);
+            error_log('ERROR', print_r($response, true));
+            return;
         }
 
         $data = json_decode(wp_remote_retrieve_body($response), true);
@@ -216,7 +217,10 @@ class Causeway_Importer {
                     'slug' => sanitize_title($name),
                 ]);
 
-                if (is_wp_error($term)) continue;
+                if (is_wp_error($term)) {
+                    error_log("Error adding term: $name");
+                    error_log(print_r($term, true));
+                }
 
                 $term_id = $term['term_id'];
             }
@@ -391,6 +395,7 @@ class Causeway_Importer {
             'headers' => ['Authorization' => 'Bearer ' . self::$token],
             'timeout' => 1200,
         ]);
+        error_log('✅ Received listings from API. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
 
         if (is_wp_error($response)) {
             error_log('❌ Failed to fetch listings');
@@ -599,5 +604,5 @@ class Causeway_Importer {
             wp_set_object_terms($post_id, $term_ids, $taxonomy);
         }
     }
-
+    
 }
