@@ -317,6 +317,30 @@ function causeway_register_acf_fields() {
                 ['key' => 'field_activated_at', 'label' => 'Activated At', 'name' => 'activated_at', 'type' => 'date_picker'],
                 ['key' => 'field_expired_at', 'label' => 'Expired At', 'name' => 'expired_at', 'type' => 'date_picker'],
                 [
+                    'key' => 'field_tripadvisor_id',
+                    'label' => 'TripAdvisor ID',
+                    'name' => 'tripadvisor_id',
+                    'type' => 'text',
+                ],
+                [
+                    'key' => 'field_tripadvisor_url',
+                    'label' => 'TripAdvisor URL',
+                    'name' => 'tripadvisor_url',
+                    'type' => 'url',
+                ],
+                [
+                    'key' => 'field_tripadvisor_rating_url',
+                    'label' => 'TripAdvisor Rating URL',
+                    'name' => 'tripadvisor_rating_url',
+                    'type' => 'url',
+                ],
+                [
+                    'key' => 'field_tripadvisor_count',
+                    'label' => 'TripAdvisor Review Count',
+                    'name' => 'tripadvisor_count',
+                    'type' => 'number',
+                ],
+                [
                     'key' => 'field_websites',
                     'label' => 'Websites',
                     'name' => 'websites',
