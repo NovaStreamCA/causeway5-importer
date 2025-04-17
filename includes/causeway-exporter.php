@@ -49,10 +49,10 @@ function get_listings($request) {
 
         $listing = [
             'id'             => $acf['causeway_id'] ?? $id,
-            'name'           => get_the_title($post),
+            'name'           => html_entity_decode(get_the_title($post)),
             'slug'           => $post->post_name,
-            'description'    => apply_filters('the_content', $post->post_content),
-            'highlights'     => $acf['highlights'] ?? null,
+            'description'    => html_entity_decode(apply_filters('the_content', $post->post_content)),
+            'highlights'     => html_entity_decode($acf['highlights']) ?? null,
             'contact_name'   => $acf['contact_name'] ?? null,
             'phone_primary'  => $acf['phone_primary'] ?? null,
             'phone_secondary'=> $acf['phone_secondary'] ?? null,
@@ -95,9 +95,9 @@ function get_listings($request) {
                 $translated_acf = get_fields($translated_post_id);
 
                 $listing['translations'][$lang_code] = [
-                    'name'        => get_the_title($translated_post),
-                    'description' => apply_filters('the_content', $translated_post->post_content),
-                    'highlights'  => $translated_acf['highlights'] ?? null,
+                    'name'        => html_entity_decode(get_the_title($translated_post)),
+                    'description' => html_entity_decode(apply_filters('the_content', $translated_post->post_content)),
+                    'highlights'  => html_entity_decode($translated_acf['highlights']) ?? null,
                 ];
             }
         }
@@ -135,7 +135,7 @@ function get_terms_with_acf($post_id, $taxonomy) {
 
         $item = [
             'id'   => (int) $causeway_id,
-            'name' => $term->name,
+            'name' => html_entity_decode(get_the_title($post)),
             'slug' => $term->slug,
         ];
 
@@ -170,7 +170,7 @@ function get_terms_with_acf($post_id, $taxonomy) {
 
                     $item['translations'][$lang_code] = array_merge([
                         'id'   => (int) $translated_causeway_id,
-                        'name' => $translated_term->name,
+                        'name' => html_entity_decode($translated_term->name),
                         'slug' => $translated_term->slug,
                     ], $translated_acf ?: []);
                 }
@@ -199,30 +199,33 @@ function get_taxonomy_terms_with_acf($request) {
     $indexed = [];
     $term_id_to_causeway_id = [];
 
-    // First pass: build base objects and id map
     foreach ($terms as $term) {
         $term_id = $term->term_id;
         $acf = get_fields($taxonomy . '_' . $term_id) ?: [];
-        
-        $causeway_id = isset($acf['causeway_id']) ? (int)$acf['causeway_id'] : $term_id;
 
+        $causeway_id = isset($acf['causeway_id']) ? (int)$acf['causeway_id'] : $term_id;
         $term_id_to_causeway_id[$term_id] = $causeway_id;
 
         $relationships = format_related_acf_ids([
             'related_communities' => 'listing-communities',
             'related_areas'       => 'listing-areas',
             'related_regions'     => 'listing-regions',
-            'listing_type'  => 'listing-type',
+            'listing_type'        => 'listing-type',
         ], $acf);
 
-        unset($acf['causeway_id'], $acf['related_communities'], $acf['related_areas'], $acf['related_regions'], $acf['listing_type']);
+        unset(
+            $acf['causeway_id'],
+            $acf['related_communities'],
+            $acf['related_areas'],
+            $acf['related_regions'],
+            $acf['listing_type']
+        );
 
         $term_data = [
-            'id'       => $causeway_id,
-            'name'     => $term->name,
-            'slug'     => $term->slug,
-            'parent'   => $term->parent, // temporary, replace later
-            'children' => [],
+            'id'     => $causeway_id,
+            'name'   => html_entity_decode($term->name),
+            'slug'   => $term->slug,
+            'parent' => null, // to be set after
         ];
 
         foreach ($relationships as $key => $val) {
@@ -235,7 +238,7 @@ function get_taxonomy_terms_with_acf($request) {
             }
         }
 
-        // Translate Term Data
+        // Add translations
         if (function_exists('icl_object_id')) {
             $languages = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
 
@@ -243,23 +246,14 @@ function get_taxonomy_terms_with_acf($request) {
                 foreach ($languages as $lang_code => $lang_info) {
                     $translated_term_id = apply_filters('wpml_object_id', $term_id, $taxonomy, true, $lang_code);
 
-                    // Skip if same as original or not found
                     if (!$translated_term_id || $translated_term_id === $term_id) continue;
 
                     $translated_term = get_term($translated_term_id, $taxonomy);
                     if (!$translated_term || is_wp_error($translated_term)) continue;
 
-                    // $translated_acf = get_fields($taxonomy . '_' . $translated_term_id);
-
                     $term_data['translations'][$lang_code] = [
-                        'name' => $translated_term->name,
+                        'name' => html_entity_decode($translated_term->name),
                     ];
-
-                    // if (!empty($translated_acf)) {
-                    //     foreach ($translated_acf as $key => $value) {
-                    //         $term_data['translations'][$lang_code][$key] = $value;
-                    //     }
-                    // }
                 }
             }
         }
@@ -267,23 +261,20 @@ function get_taxonomy_terms_with_acf($request) {
         $indexed[$term_id] = $term_data;
     }
 
-    // Second pass: assign causeway_id to parent + build children[]
-    foreach ($indexed as $term_id => &$term_data) {
-        $wp_parent_id = $term_data['parent'];
-        $causeway_parent_id = $term_id_to_causeway_id[$wp_parent_id] ?? null;
+    // Set parent to causeway_id (not WordPress term ID)
+    foreach ($terms as $term) {
+        $term_id = $term->term_id;
+        $wp_parent_id = $term->parent;
 
-        $term_data['parent'] = $causeway_parent_id;
-
-        if ($wp_parent_id && isset($indexed[$wp_parent_id])) {
-            $indexed[$wp_parent_id]['children'][] = &$term_data;
+        if ($wp_parent_id && isset($indexed[$term_id])) {
+            $indexed[$term_id]['parent'] = $term_id_to_causeway_id[$wp_parent_id] ?? null;
         }
     }
 
-    // Only return root terms (no parent)
-    $results = array_values(array_filter($indexed, fn($t) => !$t['parent']));
-
-    return rest_ensure_response($results);
+    // Return all terms, flattened
+    return rest_ensure_response(array_values($indexed));
 }
+
 
 function format_related_acf_ids(array $fieldMap, $acf): array {
     $output = [];
@@ -313,7 +304,7 @@ function format_related_acf_ids(array $fieldMap, $acf): array {
 
             $base = [
                 'id'   => (int) (get_field('causeway_id', $taxonomy . '_' . $term->term_id) ?: $term->term_id),
-                'name' => $term->name,
+                'name' => html_entity_decode($term->name),
             ];
 
             // Add translations
@@ -331,7 +322,7 @@ function format_related_acf_ids(array $fieldMap, $acf): array {
                         $translated_causeway_id = get_field('causeway_id', $taxonomy . '_' . $translated_term_id);
 
                         $base['translations'][$lang_code] = [
-                            'name' => $translated_term->name,
+                            'name' => html_entity_decode($translated_term->name),
                         ];
                     }
                 }
@@ -371,12 +362,12 @@ function format_locations($details, $coords, $post_id) {
 
         $community_data = [
             'id'   => (int) ($acf['causeway_id'] ?? $community->term_id),
-            'name' => $community->name,
+            'name' => html_entity_decode($community->name),
             'areas' => map_terms($areas, 'listing-areas'),
             'regions' => map_terms($regions, 'listing-regions'),
             'county' => $county ? [
                 'id' => (int) get_field('causeway_id', 'listing-counties_' . $county->term_id),
-                'name' => $county->name,
+                'name' => html_entity_decode($county->name),
             ] : null,
         ];
     }
@@ -409,7 +400,7 @@ function map_terms($term_ids, $taxonomy) {
             $causeway_id = get_field('causeway_id', $taxonomy . '_' . $term->term_id);
             $out[] = [
                 'id'   => (int) ($causeway_id ?? $term->term_id),
-                'name' => $term->name,
+                'name' => html_entity_decode($term->name),
             ];
         }
     }
