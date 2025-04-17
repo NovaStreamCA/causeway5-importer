@@ -45,7 +45,7 @@ function get_listings($request) {
 
     foreach ($query->posts as $post) {
         $id = $post->ID;
-        $acf = get_fields($id);
+        $acf = get_fields($id) ?: [];
 
         $listing = [
             'id'             => $acf['causeway_id'] ?? $id,
@@ -121,7 +121,7 @@ function get_terms_with_acf($post_id, $taxonomy) {
     $result = [];
 
     foreach ($terms as $term) {
-        $acf = get_fields($taxonomy . '_' . $term->term_id);
+        $acf = get_fields($taxonomy . '_' . $term->term_id) ?: [];
         $causeway_id = isset($acf['causeway_id']) ? $acf['causeway_id'] : $term->term_id;
 
         $relationship_fields = format_related_acf_ids([
@@ -164,7 +164,9 @@ function get_terms_with_acf($post_id, $taxonomy) {
                     $translated_acf = get_fields($taxonomy . '_' . $translated_term_id);
                     $translated_causeway_id = $translated_acf['causeway_id'] ?? $translated_term_id;
 
-                    unset($translated_acf['causeway_id']);
+                    if(!is_array($translated_acf)) {
+                        $translated_acf = [];
+                    }
 
                     $item['translations'][$lang_code] = array_merge([
                         'id'   => (int) $translated_causeway_id,
@@ -184,7 +186,6 @@ function get_terms_with_acf($post_id, $taxonomy) {
 
 function get_taxonomy_terms_with_acf($request) {
     $taxonomy = $request->get_param('taxonomy');
-    error_log('Taxonomy: ' . $taxonomy);
 
     if (!taxonomy_exists($taxonomy)) {
         return new WP_Error('invalid_taxonomy', 'Taxonomy does not exist.', ['status' => 404]);
@@ -201,8 +202,8 @@ function get_taxonomy_terms_with_acf($request) {
     // First pass: build base objects and id map
     foreach ($terms as $term) {
         $term_id = $term->term_id;
-        $acf = get_fields($taxonomy . '_' . $term_id);
-        // error_log("ACF" . print_r($acf, true));
+        $acf = get_fields($taxonomy . '_' . $term_id) ?: [];
+        
         $causeway_id = isset($acf['causeway_id']) ? (int)$acf['causeway_id'] : $term_id;
 
         $term_id_to_causeway_id[$term_id] = $causeway_id;
@@ -284,8 +285,12 @@ function get_taxonomy_terms_with_acf($request) {
     return rest_ensure_response($results);
 }
 
-function format_related_acf_ids(array $fieldMap, array $acf): array {
+function format_related_acf_ids(array $fieldMap, $acf): array {
     $output = [];
+
+    if(!is_array($acf)) {
+        return $output;
+    }
 
     foreach ($fieldMap as $acfKey => $taxonomy) {
         if (!isset($acf[$acfKey])) continue;
@@ -359,7 +364,7 @@ function format_locations($details, $coords, $post_id) {
 
     $community_data = null;
     if ($community) {
-        $acf = get_fields('listing-communities_' . $community->term_id);
+        $acf = get_fields('listing-communities_' . $community->term_id) ?: [];
         $areas = $acf['related_areas'] ?? [];
         $regions = $acf['related_regions'] ?? [];
         $county = wp_get_post_terms($post_id, 'listing-counties')[0] ?? null;
@@ -393,6 +398,11 @@ function format_locations($details, $coords, $post_id) {
 
 function map_terms($term_ids, $taxonomy) {
     $out = [];
+
+    if (!is_array($term_ids)) {
+        return $formatted;
+    }
+
     foreach ($term_ids as $id) {
         $term = get_term($id, $taxonomy);
         if ($term && !is_wp_error($term)) {
@@ -408,6 +418,11 @@ function map_terms($term_ids, $taxonomy) {
 
 function format_websites($sites) {
     $formatted = [];
+
+    if (!is_array($sites)) {
+        return $formatted;
+    }
+
     foreach ($sites as $i => $site) {
         $formatted[] = [
             'id' => $i + 1,
@@ -424,6 +439,11 @@ function format_websites($sites) {
 
 function format_attachments($items, $listing_id) {
     $formatted = [];
+
+    if (!is_array($items)) {
+        return $formatted;
+    }
+
     foreach ($items as $i => $a) {
         $url_parts = explode('/', $a['url']);
         $filename = end($url_parts);
@@ -441,8 +461,13 @@ function format_attachments($items, $listing_id) {
 
 function format_related($ids) {
     $out = [];
+
+    if (!is_array($ids)) {
+        return $formatted;
+    }
+
     foreach ($ids as $post_id) {
-        $acf = get_fields($post_id);
+        $acf = get_fields($post_id) ?: [];
         $out[] = [
             'id' => (int) ($acf['causeway_id'] ?? $post_id),
         ];
