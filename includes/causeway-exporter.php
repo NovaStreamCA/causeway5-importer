@@ -6,18 +6,20 @@ Causeway Data Fetching
 
 */
 
-add_action('rest_api_init', function () {
-    register_rest_route('causeway/v1', '/listings', [
-        'methods'  => 'GET',
-        'callback' => 'get_listings', // ✅ Not an array, just the function name
-        'permission_callback' => '__return_true',
-    ]);
+add_action('init', function () {
+    add_action('rest_api_init', function () {
+        register_rest_route('causeway/v1', '/listings', [
+            'methods'  => 'GET',
+            'callback' => 'get_listings',
+            'permission_callback' => '__return_true',
+        ]);
 
-    register_rest_route('causeway/v1', '/taxonomy/(?P<taxonomy>[a-zA-Z0-9_-]+)', [
-        'methods'  => 'GET',
-        'callback' => 'get_taxonomy_terms_with_acf',
-        'permission_callback' => '__return_true',
-    ]);
+        register_rest_route('causeway/v1', '/taxonomy/(?P<taxonomy>[a-zA-Z0-9_-]+)', [
+            'methods'  => 'GET',
+            'callback' => 'get_taxonomy_terms_with_acf',
+            'permission_callback' => '__return_true',
+        ]);
+    });
 });
 
 /*
@@ -89,6 +91,7 @@ function get_listings($request) {
     return $response;
 }
 
+// Helpers
 
 function get_terms_with_acf($post_id, $taxonomy) {
     $terms = wp_get_post_terms($post_id, $taxonomy);
@@ -98,7 +101,7 @@ function get_terms_with_acf($post_id, $taxonomy) {
         $acf = get_fields($taxonomy . '_' . $term->term_id);
         $causeway_id = isset($acf['causeway_id']) ? $acf['causeway_id'] : $term->term_id;
 
-        error_log("ACF" . print_r($acf, true));
+        // error_log("ACF" . print_r($acf, true));
 
         // Handle relationship fields
         $relationship_fields = format_related_acf_ids([
@@ -137,6 +140,7 @@ function get_terms_with_acf($post_id, $taxonomy) {
 
 function get_taxonomy_terms_with_acf($request) {
     $taxonomy = $request->get_param('taxonomy');
+    error_log('Taxonomy: ' . $taxonomy);
 
     if (!taxonomy_exists($taxonomy)) {
         return new WP_Error('invalid_taxonomy', 'Taxonomy does not exist.', ['status' => 404]);
@@ -154,7 +158,7 @@ function get_taxonomy_terms_with_acf($request) {
     foreach ($terms as $term) {
         $term_id = $term->term_id;
         $acf = get_fields($taxonomy . '_' . $term_id);
-        error_log("ACF" . print_r($acf, true));
+        // error_log("ACF" . print_r($acf, true));
         $causeway_id = isset($acf['causeway_id']) ? (int)$acf['causeway_id'] : $term_id;
 
         $term_id_to_causeway_id[$term_id] = $causeway_id;
@@ -183,6 +187,29 @@ function get_taxonomy_terms_with_acf($request) {
         if (!empty($acf)) {
             foreach ($acf as $key => $value) {
                 $term_data[$key] = $value;
+            }
+        }
+
+        // Translate Term Data
+        if (function_exists('icl_object_id')) {
+            $languages = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
+
+            if (!empty($languages)) {
+                foreach ($languages as $lang_code => $lang_info) {
+                    $translated_term_id = apply_filters('wpml_object_id', $term_id, $taxonomy, true, $lang_code);
+
+                    // Skip if same as original or not found
+                    if (!$translated_term_id || $translated_term_id === $term_id) continue;
+
+                    $translated_term = get_term($translated_term_id, $taxonomy);
+                    if (!$translated_term || is_wp_error($translated_term)) continue;
+
+                    $translated_acf_id = get_field('causeway_id', $taxonomy . '_' . $translated_term_id);
+
+                    $term_data['translations'][$lang_code] = [
+                        'name' => $translated_term->name,
+                    ];
+                }
             }
         }
 
@@ -258,8 +285,6 @@ function format_related_acf_ids(array $fieldMap, array $acf): array {
     return $output;
 }
 
-
-// Helpers
 function format_locations($details, $coords, $post_id) {
     $community_terms = wp_get_post_terms($post_id, 'listing-communities');
     $community = $community_terms[0] ?? null;
