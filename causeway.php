@@ -12,6 +12,7 @@ if (!defined('ABSPATH')) exit;
 require_once plugin_dir_path(__FILE__) . 'admin/acf-fields.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-causeway-importer.php';
 require_once plugin_dir_path(__FILE__) . 'admin/class-causeway-admin.php';
+require_once plugin_dir_path(__FILE__) . 'includes/causeway-exporter.php';
 
 add_action('admin_init', function () {
     Causeway_Admin::init();
