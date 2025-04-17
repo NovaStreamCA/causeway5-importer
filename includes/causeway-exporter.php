@@ -80,7 +80,13 @@ function get_listings($request) {
         ];
     }
 
-    return rest_ensure_response($results);
+    $response = rest_ensure_response($results);
+
+    // 🔹 Add headers for pagination
+    $response->header('X-WP-Total', (int) $query->found_posts);
+    $response->header('X-WP-TotalPages', (int) $query->max_num_pages);
+
+    return $response;
 }
 
 
@@ -96,13 +102,13 @@ function get_terms_with_acf($post_id, $taxonomy) {
 
         // Handle relationship fields
         $relationship_fields = format_related_acf_ids([
-            'communities' => 'listing-communities',
-            'areas'       => 'listing-areas',
-            'regions'     => 'listing-regions',
+            'related_communities' => 'listing-communities',
+            'related_areas'       => 'listing-areas',
+            'related_regions'     => 'listing-regions',
             'listing_type'  => 'listing-type',
         ], $acf);
 
-        error_log('Relationship fields: ' . print_r($relationship_fields, true));
+        // error_log('Relationship fields: ' . print_r($relationship_fields, true));
 
         unset($acf['causeway_id'], $acf['related_communities'], $acf['related_areas'], $acf['related_regions'], $acf['listing_type']);
 
@@ -141,31 +147,33 @@ function get_taxonomy_terms_with_acf($request) {
         'hide_empty' => false,
     ]);
 
-    $results = [];
+    $indexed = [];
+    $term_id_to_causeway_id = [];
 
+    // First pass: build base objects and id map
     foreach ($terms as $term) {
         $term_id = $term->term_id;
         $acf = get_fields($taxonomy . '_' . $term_id);
+        error_log("ACF" . print_r($acf, true));
         $causeway_id = isset($acf['causeway_id']) ? (int)$acf['causeway_id'] : $term_id;
 
-        if(!empty($acf)) {
-            // Format relationship ACF fields
-            $relationships = format_related_acf_ids([
-                'communities' => 'listing-communities',
-                'areas'       => 'listing-areas',
-                'regions'     => 'listing-regions',
-                'listing_type' => 'listing-type',
-            ], $acf);
+        $term_id_to_causeway_id[$term_id] = $causeway_id;
 
-            // Remove the raw fields after formatting
-            unset($acf['causeway_id'], $acf['related_communities'], $acf['related_areas'], $acf['related_regions'], $acf['listing_type']);
-        }
+        $relationships = format_related_acf_ids([
+            'related_communities' => 'listing-communities',
+            'related_areas'       => 'listing-areas',
+            'related_regions'     => 'listing-regions',
+            'listing_type'  => 'listing-type',
+        ], $acf);
 
-        // Build the response
+        unset($acf['causeway_id'], $acf['related_communities'], $acf['related_areas'], $acf['related_regions'], $acf['listing_type']);
+
         $term_data = [
-            'id'   => $causeway_id,
-            'name' => $term->name,
-            'slug' => $term->slug,
+            'id'       => $causeway_id,
+            'name'     => $term->name,
+            'slug'     => $term->slug,
+            'parent'   => $term->parent, // temporary, replace later
+            'children' => [],
         ];
 
         foreach ($relationships as $key => $val) {
@@ -178,12 +186,26 @@ function get_taxonomy_terms_with_acf($request) {
             }
         }
 
-        $results[] = $term_data;
+        $indexed[$term_id] = $term_data;
     }
+
+    // Second pass: assign causeway_id to parent + build children[]
+    foreach ($indexed as $term_id => &$term_data) {
+        $wp_parent_id = $term_data['parent'];
+        $causeway_parent_id = $term_id_to_causeway_id[$wp_parent_id] ?? null;
+
+        $term_data['parent'] = $causeway_parent_id;
+
+        if ($wp_parent_id && isset($indexed[$wp_parent_id])) {
+            $indexed[$wp_parent_id]['children'][] = &$term_data;
+        }
+    }
+
+    // Only return root terms (no parent)
+    $results = array_values(array_filter($indexed, fn($t) => !$t['parent']));
 
     return rest_ensure_response($results);
 }
-
 
 function format_related_acf_ids(array $fieldMap, array $acf): array {
     $output = [];
@@ -191,7 +213,16 @@ function format_related_acf_ids(array $fieldMap, array $acf): array {
     foreach ($fieldMap as $acfKey => $taxonomy) {
         if (!isset($acf[$acfKey])) continue;
 
-        $outputKey = ($acfKey === 'listing_type') ? 'type' : $acfKey;
+
+        if($acfKey === 'listing_type') {
+            $outputKey = 'type';
+        } else if($acfKey === 'related_communities') {
+            $outputKey = 'communities';
+        } else if($acfKey === 'related_areas') {
+            $outputKey = 'areas';
+        } else if($acfKey === 'related_regions') {
+            $outputKey = 'regions';
+        }
 
         // Handle multiple (array of IDs)
         if (is_array($acf[$acfKey])) {
@@ -326,8 +357,13 @@ function format_related($ids) {
     return $out;
 }
 
-function format_dates(array $dates): array {
+function format_dates($dates): array {
+
     $result = [];
+
+    if(!is_array($dates)) {
+        return $result;
+    }
 
     foreach ($dates as $date) {
         $result[] = [
