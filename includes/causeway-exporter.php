@@ -47,7 +47,7 @@ function get_listings($request) {
         $id = $post->ID;
         $acf = get_fields($id);
 
-        $results[] = [
+        $listing = [
             'id'             => $acf['causeway_id'] ?? $id,
             'name'           => get_the_title($post),
             'slug'           => $post->post_name,
@@ -68,18 +68,41 @@ function get_listings($request) {
             'activated_at'  => $acf['activated_at'] ?? null,
             'expired_at'    => $acf['expired_at'] ?? null,
             'is_featured'   => (bool) ($acf['is_featured'] ?? false),
-            'price'             => floatval($acf['price'] ?? 0),
-            'types'       => get_terms_with_acf($id, 'listing-type'),
-            'categories'  => get_terms_with_acf($id, 'listings-category'),
-            'amenities'   => get_terms_with_acf($id, 'listings-amenities'),
-            'campaigns'   => get_terms_with_acf($id, 'listing-campaigns'),
-            'seasons'     => get_terms_with_acf($id, 'listings-seasons'),
-            'locations'         => format_locations($acf['location_details'] ?? [], $acf['location'] ?? [], $id),
-            'websites'          => format_websites($acf['websites'] ?? []),
-            'attachments'       => format_attachments($acf['attachments'] ?? [], $id),
+            'price'         => floatval($acf['price'] ?? 0),
+            'types'         => get_terms_with_acf($id, 'listing-type'),
+            'categories'    => get_terms_with_acf($id, 'listings-category'),
+            'amenities'     => get_terms_with_acf($id, 'listings-amenities'),
+            'campaigns'     => get_terms_with_acf($id, 'listing-campaigns'),
+            'seasons'       => get_terms_with_acf($id, 'listings-seasons'),
+            'locations'     => format_locations($acf['location_details'] ?? [], $acf['location'] ?? [], $id),
+            'websites'      => format_websites($acf['websites'] ?? []),
+            'attachments'   => format_attachments($acf['attachments'] ?? [], $id),
             'dates'         => format_dates($acf['dates'] ?? []),
-            // 'related'           => $acf['related_listings'], //TODO related does not work currently in the importer
         ];
+
+        // 🔁 Add translations for frontend fields only
+        if (function_exists('icl_object_id')) {
+            $languages = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
+
+            foreach ($languages as $lang_code => $lang_info) {
+                $translated_post_id = apply_filters('wpml_object_id', $id, 'listing', true, $lang_code);
+
+                if (!$translated_post_id || $translated_post_id === $id) continue;
+
+                $translated_post = get_post($translated_post_id);
+                if (!$translated_post || $translated_post->post_status !== 'publish') continue;
+
+                $translated_acf = get_fields($translated_post_id);
+
+                $listing['translations'][$lang_code] = [
+                    'name'        => get_the_title($translated_post),
+                    'description' => apply_filters('the_content', $translated_post->post_content),
+                    'highlights'  => $translated_acf['highlights'] ?? null,
+                ];
+            }
+        }
+
+        $results[] = $listing;
     }
 
     $response = rest_ensure_response($results);
@@ -101,27 +124,21 @@ function get_terms_with_acf($post_id, $taxonomy) {
         $acf = get_fields($taxonomy . '_' . $term->term_id);
         $causeway_id = isset($acf['causeway_id']) ? $acf['causeway_id'] : $term->term_id;
 
-        // error_log("ACF" . print_r($acf, true));
-
-        // Handle relationship fields
         $relationship_fields = format_related_acf_ids([
             'related_communities' => 'listing-communities',
             'related_areas'       => 'listing-areas',
             'related_regions'     => 'listing-regions',
-            'listing_type'  => 'listing-type',
+            'listing_type'        => 'listing-type',
         ], $acf);
-
-        // error_log('Relationship fields: ' . print_r($relationship_fields, true));
 
         unset($acf['causeway_id'], $acf['related_communities'], $acf['related_areas'], $acf['related_regions'], $acf['listing_type']);
 
         $item = [
             'id'   => (int) $causeway_id,
             'name' => $term->name,
-            // 'slug' => $term->slug,
+            'slug' => $term->slug,
         ];
 
-        // Add extracted relationships at root level
         foreach ($relationship_fields as $key => $value) {
             $item[$key] = $value;
         }
@@ -132,11 +149,38 @@ function get_terms_with_acf($post_id, $taxonomy) {
             }
         }
 
+        // 🔁 Add translations for term
+        if (function_exists('icl_object_id')) {
+            $languages = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
+            if (!empty($languages)) {
+                foreach ($languages as $lang_code => $lang_info) {
+                    $translated_term_id = apply_filters('wpml_object_id', $term->term_id, $taxonomy, true, $lang_code);
+
+                    if (!$translated_term_id || $translated_term_id === $term->term_id) continue;
+
+                    $translated_term = get_term($translated_term_id, $taxonomy);
+                    if (!$translated_term || is_wp_error($translated_term)) continue;
+
+                    $translated_acf = get_fields($taxonomy . '_' . $translated_term_id);
+                    $translated_causeway_id = $translated_acf['causeway_id'] ?? $translated_term_id;
+
+                    unset($translated_acf['causeway_id']);
+
+                    $item['translations'][$lang_code] = array_merge([
+                        'id'   => (int) $translated_causeway_id,
+                        'name' => $translated_term->name,
+                        'slug' => $translated_term->slug,
+                    ], $translated_acf ?: []);
+                }
+            }
+        }
+
         $result[] = $item;
     }
 
     return $result;
 }
+
 
 function get_taxonomy_terms_with_acf($request) {
     $taxonomy = $request->get_param('taxonomy');
