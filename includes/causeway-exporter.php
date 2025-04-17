@@ -204,11 +204,17 @@ function get_taxonomy_terms_with_acf($request) {
                     $translated_term = get_term($translated_term_id, $taxonomy);
                     if (!$translated_term || is_wp_error($translated_term)) continue;
 
-                    $translated_acf_id = get_field('causeway_id', $taxonomy . '_' . $translated_term_id);
+                    // $translated_acf = get_fields($taxonomy . '_' . $translated_term_id);
 
                     $term_data['translations'][$lang_code] = [
                         'name' => $translated_term->name,
                     ];
+
+                    // if (!empty($translated_acf)) {
+                    //     foreach ($translated_acf as $key => $value) {
+                    //         $term_data['translations'][$lang_code][$key] = $value;
+                    //     }
+                    // }
                 }
             }
         }
@@ -240,50 +246,68 @@ function format_related_acf_ids(array $fieldMap, array $acf): array {
     foreach ($fieldMap as $acfKey => $taxonomy) {
         if (!isset($acf[$acfKey])) continue;
 
-
-        if($acfKey === 'listing_type') {
+        if ($acfKey === 'listing_type') {
             $outputKey = 'type';
-        } else if($acfKey === 'related_communities') {
+        } else if ($acfKey === 'related_communities') {
             $outputKey = 'communities';
-        } else if($acfKey === 'related_areas') {
+        } else if ($acfKey === 'related_areas') {
             $outputKey = 'areas';
-        } else if($acfKey === 'related_regions') {
+        } else if ($acfKey === 'related_regions') {
             $outputKey = 'regions';
+        } else {
+            continue;
         }
 
-        // Handle multiple (array of IDs)
+        $format_term = function ($term_id) use ($taxonomy) {
+            $term = get_term($term_id, $taxonomy);
+            if (!$term || is_wp_error($term)) return null;
+
+            $base = [
+                'id'   => (int) (get_field('causeway_id', $taxonomy . '_' . $term->term_id) ?: $term->term_id),
+                'name' => $term->name,
+            ];
+
+            // Add translations
+            if (function_exists('icl_object_id')) {
+                $languages = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
+                if (!empty($languages)) {
+                    foreach ($languages as $lang_code => $lang_info) {
+                        $translated_term_id = apply_filters('wpml_object_id', $term_id, $taxonomy, true, $lang_code);
+
+                        if (!$translated_term_id || $translated_term_id === $term_id) continue;
+
+                        $translated_term = get_term($translated_term_id, $taxonomy);
+                        if (!$translated_term || is_wp_error($translated_term)) continue;
+
+                        $translated_causeway_id = get_field('causeway_id', $taxonomy . '_' . $translated_term_id);
+
+                        $base['translations'][$lang_code] = [
+                            'name' => $translated_term->name,
+                        ];
+                    }
+                }
+            }
+
+            return $base;
+        };
+
         if (is_array($acf[$acfKey])) {
             $formatted = [];
-
             foreach ($acf[$acfKey] as $term_id) {
-                $term = get_term($term_id, $taxonomy);
-                if (!$term || is_wp_error($term)) continue;
-
-                $causeway_id = get_field('causeway_id', $taxonomy . '_' . $term->term_id);
-                $formatted[] = [
-                    'id'   => (int) ($causeway_id ?: $term->term_id),
-                    'name' => $term->name,
-                ];
+                $data = $format_term($term_id);
+                if ($data) $formatted[] = $data;
             }
-
             $output[$outputKey] = $formatted;
-        }
-        // Handle single term ID
-        elseif (is_numeric($acf[$acfKey])) {
+        } elseif (is_numeric($acf[$acfKey])) {
             $term_id = $acf[$acfKey];
-            $term = get_term($term_id, $taxonomy);
-            if ($term && !is_wp_error($term)) {
-                $causeway_id = get_field('causeway_id', $taxonomy . '_' . $term->term_id);
-                $output[$outputKey] = [
-                    'id'   => (int) ($causeway_id ?: $term->term_id),
-                    'name' => $term->name,
-                ];
-            }
+            $data = $format_term($term_id);
+            if ($data) $output[$outputKey] = $data;
         }
     }
 
     return $output;
 }
+
 
 function format_locations($details, $coords, $post_id) {
     $community_terms = wp_get_post_terms($post_id, 'listing-communities');
