@@ -1,6 +1,6 @@
 <?php
 class Causeway_Importer {
-    private static $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhcGktY2F1c2V3YXk1Lm5vdmFzdHJlYW0uZGV2IiwiaWF0IjoxNzQ0NzQyODU3LCJleHAiOjE3NDQ4MjkyNTcsInVpZCI6M30.LHWK5u_6PdOqxWOKU3XeJsK5txgiaRUmTMniJxdVFog';
+    private static $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhcGktY2F1c2V3YXk1Lm5vdmFzdHJlYW0uZGV2IiwiaWF0IjoxNzQ0ODk3MjQxLCJleHAiOjE3NDQ5ODM2NDEsInVpZCI6M30.8TWuKhpelk66edanpYwk8_cevbb1m9mURc9390SQqlI';
     private static $areas = [];
     private static $communities = [];
     private static $regions = [];
@@ -534,6 +534,17 @@ class Causeway_Importer {
                 ];
             }
             update_field('attachments', $attachments, $post_id);
+
+            // Dates Repeater
+            $dates = [];
+            foreach ($item['dates'] ?? [] as $date) {
+                $dates[] = [
+                    'start_at' => $date['start_at'] ?? '',
+                    'end_at'   => $date['end_at'] ?? '',
+                    'rrule'    => $date['rrule'] ?? '',
+                ];
+            }
+            update_field('dates', $dates, $post_id);
 
             // error_log("✅ Added Listing: " . $post_title . " (ID: $post_id)");
         }

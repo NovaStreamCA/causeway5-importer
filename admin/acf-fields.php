@@ -379,6 +379,32 @@ function causeway_register_acf_fields() {
                     ],
                 ],
                 [
+                    'key' => 'field_listing_dates',
+                    'label' => 'Dates',
+                    'name' => 'dates',
+                    'type' => 'repeater',
+                    'sub_fields' => [
+                        [
+                            'key' => 'field_listing_date_start',
+                            'label' => 'Start At',
+                            'name' => 'start_at',
+                            'type' => 'date_time_picker',
+                        ],
+                        [
+                            'key' => 'field_listing_date_end',
+                            'label' => 'End At',
+                            'name' => 'end_at',
+                            'type' => 'date_time_picker',
+                        ],
+                        [
+                            'key' => 'field_listing_date_rrule',
+                            'label' => 'Recurrence Rule',
+                            'name' => 'rrule',
+                            'type' => 'textarea',
+                        ],
+                    ],
+                ],
+                [
                     'key' => 'field_related_listings',
                     'label' => 'Related Listings',
                     'name' => 'related_listings',
