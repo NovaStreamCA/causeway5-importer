@@ -1,6 +1,6 @@
 <?php
 class Causeway_Importer {
-    private static $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhcGktY2F1c2V3YXk1Lm5vdmFzdHJlYW0uZGV2IiwiaWF0IjoxNzQ0ODk3MjQxLCJleHAiOjE3NDQ5ODM2NDEsInVpZCI6M30.8TWuKhpelk66edanpYwk8_cevbb1m9mURc9390SQqlI';
+    private static $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhcGktY2F1c2V3YXk1Lm5vdmFzdHJlYW0uZGV2IiwiaWF0IjoxNzQ1MzI3MTM5LCJleHAiOjE3NDU0MTM1MzksInVpZCI6M30.ptYRERhNTks2uCIh8Y0A6BB7WRwxCi-KNvPGl-UY9ZY';
     private static $areas = [];
     private static $communities = [];
     private static $regions = [];
@@ -570,6 +570,30 @@ class Causeway_Importer {
         // }
 
         error_log('✅ Listings imported. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+
+        $imported_ids = array_column($listings, 'id');
+        self::delete_old_listings($imported_ids);
+    }
+
+    private static function delete_old_listings($imported_ids) {
+        // Query all existing listings with causeway_id
+        $existing_listings = get_posts([
+            'post_type'      => 'listing',
+            'posts_per_page' => -1,
+            'post_status'    => 'any',
+            'meta_key'       => 'causeway_id',
+            'fields'         => 'ids',
+        ]);
+
+        foreach ($existing_listings as $post_id) {
+            $existing_causeway_id = get_field('causeway_id', $post_id);
+            
+            // If not in imported list, delete it
+            if (!in_array((int)$existing_causeway_id, $imported_ids, true)) {
+                wp_delete_post($post_id, true); // true = force delete / false = move to trash
+                error_log("🗑️ Deleted stale listing with ID: $post_id and Causeway ID: $existing_causeway_id");
+            }
+        }
     }
 
     // Helper functions
