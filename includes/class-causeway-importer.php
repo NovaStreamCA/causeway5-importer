@@ -604,6 +604,8 @@ class Causeway_Importer {
     public static function export_listings() {
         // Notify public site to re-fetch causeway data
         $public_url = get_field('causeway_public_url', 'option');
+        $secret = get_field('headless_api_secret', 'option');
+
         if ($public_url) {
             $endpoint = trailingslashit($public_url) . 'api/fetch-causeway';
             
@@ -612,6 +614,7 @@ class Causeway_Importer {
                 'connect_timeout' => 30,
                 'headers'         => [
                     'Content-Type' => 'application/json',
+                    'x-causeway-secret' => $secret,
                 ],
                 'body' => json_encode([
                     'trigger' => 'listings_updated',

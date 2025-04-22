@@ -448,6 +448,14 @@ function causeway_register_acf_fields() {
                     'instructions' => 'Enter the public-facing website URL (e.g. https://cbisland.ca)',
                     'required' => 1,
                 ],
+                [
+                    'key' => 'field_headless_api_secret',
+                    'label' => 'Headless API Secret',
+                    'name' => 'headless_api_secret',
+                    'type' => 'text',
+                    'instructions' => 'Shared secret to authorize API calls from WordPress to the Angular site.',
+                    'required' => 1,
+                ],
             ],
             'location' => [
                 [
