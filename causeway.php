@@ -105,3 +105,34 @@ add_action('admin_post_causeway_manual_export', function () {
     wp_redirect(add_query_arg('exported', '1', wp_get_referer()));
     exit;
 });
+
+// Register CRON on plugin activation
+register_activation_hook(__FILE__, function () {
+    if (!wp_next_scheduled('causeway_cron_hook')) {
+        wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
+    }
+});
+
+// Safety fallback in case plugin was already active
+add_action('init', function () {
+    if (!wp_next_scheduled('causeway_cron_hook')) {
+        wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
+    }
+});
+
+// Deactivate CRON on plugin deactivation
+register_deactivation_hook(__FILE__, function () {
+    $timestamp = wp_next_scheduled('causeway_cron_hook');
+    if ($timestamp) {
+        wp_unschedule_event($timestamp, 'causeway_cron_hook');
+    }
+});
+
+add_action('causeway_cron_hook', 'run_causeway_export');
+
+function run_causeway_export() {
+    error_log('🕑 Running Causeway export via cron @ ' . date('Y-m-d H:i:s'));
+    if (class_exists('Causeway_Importer')) {
+        Causeway_Importer::import();
+    }
+}
