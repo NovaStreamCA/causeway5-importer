@@ -94,11 +94,15 @@ function get_listings($request) {
 
                 $translated_acf = get_fields($translated_post_id);
 
-                $listing['translations'][$lang_code] = [
-                    'name'        => html_entity_decode(get_the_title($translated_post)),
-                    'description' => html_entity_decode(apply_filters('the_content', $translated_post->post_content)),
-                    'highlights'  => html_entity_decode($translated_acf['highlights']) ?? null,
-                ];
+                if($translated_acf) {
+                    $listing['translations'][$lang_code] = [
+                        'name'        => html_entity_decode(get_the_title($translated_post)),
+                        'description' => html_entity_decode(apply_filters('the_content', $translated_post->post_content)),
+                        'highlights'  => html_entity_decode($translated_acf['highlights']) ?? null,
+                    ];
+                } else {
+                    $listing['translations'][$lang_code] = [];
+                }
             }
         }
 
@@ -135,7 +139,7 @@ function get_terms_with_acf($post_id, $taxonomy) {
 
         $item = [
             'id'   => (int) $causeway_id,
-            'name' => html_entity_decode(get_the_title($post)),
+            'name' => html_entity_decode(get_the_title($post_id)),
             'slug' => $term->slug,
         ];
 

@@ -3,6 +3,16 @@
 add_action('acf/init', 'causeway_register_acf_fields');
 
 function causeway_register_acf_fields() {
+    if (function_exists('acf_add_options_page')) {
+        acf_add_options_sub_page([
+            'page_title'  => 'Import Settings',
+            'menu_title'  => 'Settings',
+            'parent_slug' => 'edit.php?post_type=listing', // adds it under Listings
+            'menu_slug'   => 'causeway-settings',
+            'capability'  => 'manage_options',
+        ]);
+    }
+
     if( function_exists('acf_add_local_field_group') ) {
         // Listing Types
         acf_add_local_field_group([
@@ -142,7 +152,6 @@ function causeway_register_acf_fields() {
             ],
         ]);
 
-
         // Communities
         acf_add_local_field_group([
             'key' => 'group_listing_communities',
@@ -189,7 +198,6 @@ function causeway_register_acf_fields() {
                 ],
             ],
         ]);
-
 
         // Regions
         acf_add_local_field_group([
@@ -419,8 +427,47 @@ function causeway_register_acf_fields() {
             'location' => [[['param' => 'post_type', 'operator' => '==', 'value' => 'listing']]],
         ]);
 
-
+        // Settings
+        acf_add_local_field_group([
+            'key' => 'group_causeway_settings',
+            'title' => 'Causeway Import Settings',
+            'fields' => [
+                [
+                    'key' => 'field_causeway_token',
+                    'label' => 'API Token',
+                    'name' => 'causeway_api_token',
+                    'type' => 'text',
+                    'instructions' => 'Paste the Causeway API token here.',
+                    'required' => 1,
+                ],
+                [
+                    'key' => 'field_causeway_public_url',
+                    'label' => 'Public Website URL',
+                    'name' => 'causeway_public_url',
+                    'type' => 'url',
+                    'instructions' => 'Enter the public-facing website URL (e.g. https://cbisland.ca)',
+                    'required' => 1,
+                ],
+            ],
+            'location' => [
+                [
+                    [
+                        'param' => 'options_page',
+                        'operator' => '==',
+                        'value' => 'causeway-settings',
+                    ],
+                ],
+            ],
+            'menu_order' => 0,
+            'position' => 'normal',
+            'style' => 'default',
+            'label_placement' => 'top',
+            'instruction_placement' => 'label',
+            'hide_on_screen' => '',
+        ]);
 
 
     }
+
+    
 }

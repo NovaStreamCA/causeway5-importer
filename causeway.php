@@ -92,3 +92,16 @@ add_action('admin_post_causeway_manual_import', function () {
     wp_redirect(add_query_arg('imported', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
     exit;
 });
+
+add_action('admin_post_causeway_manual_export', function () {
+    if (!current_user_can('manage_options') || !check_admin_referer('causeway_export_action', 'causeway_export_nonce')) {
+        wp_die('Unauthorized or nonce check failed.');
+    }
+
+    if (class_exists('Causeway_Importer')) {
+        Causeway_Importer::export_listings();
+    }
+
+    wp_redirect(add_query_arg('exported', '1', wp_get_referer()));
+    exit;
+});

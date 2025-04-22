@@ -1,12 +1,15 @@
 <?php
 class Causeway_Importer {
-    private static $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhcGktY2F1c2V3YXk1Lm5vdmFzdHJlYW0uZGV2IiwiaWF0IjoxNzQ1MzI3MTM5LCJleHAiOjE3NDU0MTM1MzksInVpZCI6M30.ptYRERhNTks2uCIh8Y0A6BB7WRwxCi-KNvPGl-UY9ZY';
     private static $areas = [];
     private static $communities = [];
     private static $regions = [];
     private static $counties = [];
     private static $listing_map = [];
     private static $start;
+
+    private static function get_token() {
+        return get_field('causeway_api_token', 'option');
+    }
 
     public static function import() {
         error_log('start import');
@@ -38,13 +41,15 @@ class Causeway_Importer {
         self::import_listings();
 
         error_log('✅ Import Completed. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+
+        self::export_listings();
     }
 
     private static function fetch_remote($endpoint) {
         $url = 'https://api-causeway5.novastream.dev/' . $endpoint;
         $response = wp_remote_get($url, [
             'headers' => [
-                'Authorization' => 'Bearer ' . self::$token,
+                'Authorization' => 'Bearer ' . self::get_token(),
             ],
         ]);
 
@@ -57,7 +62,7 @@ class Causeway_Importer {
         error_log('Import types...');
         $response = wp_remote_get('https://api-causeway5.novastream.dev/listing-types', [
             'headers' => [
-                'Authorization' => 'Bearer '. self::$token,
+                'Authorization' => 'Bearer '. self::get_token(),
             ],
         ]);
 
@@ -106,7 +111,7 @@ class Causeway_Importer {
 
         $response = wp_remote_get('https://api-causeway5.novastream.dev/categories', [
             'headers' => [
-                'Authorization' => 'Bearer '. self::$token,
+                'Authorization' => 'Bearer '. self::get_token(),
             ],
         ]);
 
@@ -183,7 +188,7 @@ class Causeway_Importer {
 
         $response = wp_remote_get('https://api-causeway5.novastream.dev/amenities', [
             'headers' => [
-                'Authorization' => 'Bearer '. self::$token,
+                'Authorization' => 'Bearer '. self::get_token(),
             ],
         ]);
 
@@ -243,7 +248,7 @@ class Causeway_Importer {
 
         $response = wp_remote_get('https://api-causeway5.novastream.dev/campaigns', [
             'headers' => [
-                'Authorization' => 'Bearer ' . self::$token,
+                'Authorization' => 'Bearer ' . self::get_token(),
             ],
         ]);
 
@@ -389,7 +394,7 @@ class Causeway_Importer {
         error_log('Importing listings..');
         
         $response = wp_remote_get('https://api-causeway5.novastream.dev/listings', [
-            'headers' => ['Authorization' => 'Bearer ' . self::$token],
+            'headers' => ['Authorization' => 'Bearer ' . self::get_token()],
             'timeout' => 1200,
         ]);
         error_log('✅ Received listings from API. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
@@ -592,6 +597,32 @@ class Causeway_Importer {
             if (!in_array((int)$existing_causeway_id, $imported_ids, true)) {
                 wp_delete_post($post_id, true); // true = force delete / false = move to trash
                 error_log("🗑️ Deleted stale listing with ID: $post_id and Causeway ID: $existing_causeway_id");
+            }
+        }
+    }
+
+    public static function export_listings() {
+        // Notify public site to re-fetch causeway data
+        $public_url = get_field('causeway_public_url', 'option');
+        if ($public_url) {
+            $endpoint = trailingslashit($public_url) . 'api/fetch-causeway';
+            
+            $response = wp_remote_post($endpoint, [
+                'timeout' => 1200,
+                'connect_timeout' => 30,
+                'headers'         => [
+                    'Content-Type' => 'application/json',
+                ],
+                'body' => json_encode([
+                    'trigger' => 'listings_updated',
+                ]),
+            ]);
+
+            if (is_wp_error($response)) {
+                error_log('❌ Failed to notify public site. ' . $endpoint);
+                error_log(print_r($response, true));
+            } else {
+                error_log('✅ Public site received data at ' . $endpoint);
             }
         }
     }

@@ -21,14 +21,23 @@ class Causeway_Admin {
         if (isset($_GET['imported']) && $_GET['imported'] === '1') {
             echo '<div class="notice notice-success is-dismissible"><p>✅ Listings imported successfully.</p></div>';
         }
+        if (isset($_GET['exported']) && $_GET['exported'] === '1') {
+            echo '<div class="notice notice-success is-dismissible"><p>✅ Listings exported successfully.</p></div>';
+        }
         ?>
 <div class="wrap">
     <h1>Causeway Listings Importer</h1>
     <p>This tool will manually import all listings and taxonomy data from the external Causeway API into your WordPress site.</p>
     <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
-        <input type="hidden" name="action" value="causeway_manual_import">
         <?php wp_nonce_field('causeway_import_action', 'causeway_import_nonce'); ?>
+        <input type="hidden" name="action" value="causeway_manual_import">
         <input type="submit" name="causeway_import_submit" class="button button-primary" value="Start Import">
+    </form>
+
+    <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="margin-top: 20px;">
+        <?php wp_nonce_field('causeway_export_action', 'causeway_export_nonce'); ?>
+        <input type="hidden" name="action" value="causeway_manual_export">
+        <input type="submit" name="causeway_export_submit" class="button button-secondary" value="Start Export">
     </form>
 </div>
 <?php
