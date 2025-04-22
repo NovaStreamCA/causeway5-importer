@@ -8,8 +8,8 @@ class Causeway_Admin {
     public static function add_admin_page() {
         add_submenu_page(
             'edit.php?post_type=listing',       // Parent menu under Listings CPT
-            'Causeway Importer',                 // Page title
-            'Causeway Importer',                 // Menu title
+            'Import/Export Causeway',                 // Page title
+            'Import/Export Causeway',                 // Menu title
             'manage_options',                    // Capability
             'causeway-importer',                 // Menu slug
             [self::class, 'render_page']         // Callback function
@@ -26,14 +26,17 @@ class Causeway_Admin {
         }
         ?>
 <div class="wrap">
-    <h1>Causeway Listings Importer</h1>
-    <p>This tool will manually import all listings and taxonomy data from the external Causeway API into your WordPress site.</p>
+    <h1>Causeway Data Importer <span style='font-size: 1.1rem;'>(Causeway to Here)</span></h1>
+    <p>This tool will manually import all listings and taxonomy data from the external Causeway API into your WordPress site and then automatically send it to the public angular
+        site.</p>
     <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
         <?php wp_nonce_field('causeway_import_action', 'causeway_import_nonce'); ?>
         <input type="hidden" name="action" value="causeway_manual_import">
         <input type="submit" name="causeway_import_submit" class="button button-primary" value="Start Import">
     </form>
 
+    <h1>Causeway Data Exporter <span style='font-size: 1.1rem;'>(Here to Public Website)</span></h1>
+    <p>This tool will manually export all listings and taxonomy data from this website into the public headless Angular site.</p>
     <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="margin-top: 20px;">
         <?php wp_nonce_field('causeway_export_action', 'causeway_export_nonce'); ?>
         <input type="hidden" name="action" value="causeway_manual_export">
