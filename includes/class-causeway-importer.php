@@ -67,7 +67,7 @@ class Causeway_Importer {
         ]);
 
         if (is_wp_error($response)) {
-            error_log('ERROR', print_r($response, true));
+            error_log('ERROR: ' . print_r($response, true));
             return;
         }
 
@@ -392,8 +392,9 @@ class Causeway_Importer {
 
     private static function import_listings() {
         error_log('Importing listings..');
+        $imported_ids = [];
         
-        $response = wp_remote_get('https://api-causeway5.novastream.dev/listings', [
+        $response = wp_remote_get('https://api-causeway5.novastream.dev/listings?search=listings.status&compare==&value=Published', [
             'headers' => ['Authorization' => 'Bearer ' . self::get_token()],
             'timeout' => 1200,
         ]);
@@ -417,29 +418,50 @@ class Causeway_Importer {
             $slug = $item['slug'] ?? '';
             $description = $item['description'] ?? '';
             $causeway_id = $item['id'] ?? null;
+            $post_status = strtolower($item['status'] ?? '') === 'published' ? 'publish' : 'draft';
 
             // error_log("Starting listing " . $post_title);
 
-            if (!$post_title || !$slug || !$causeway_id) continue;
+            if (!$post_title || !$slug || !$causeway_id || $post_status !== 'publish') continue;
 
-            // Check if post already exists by slug
-            $existing = get_page_by_path($slug, OBJECT, 'listing');
-            $post_id = $existing ? $existing->ID : null;
+            // Check if post already exists by causeway_id
+            $existing = get_posts([
+                'post_type'  => 'listing',
+                'meta_key'   => 'causeway_id',
+                'meta_value' => $causeway_id,
+                'numberposts' => 1,
+                'fields' => 'ids',
+                'lang' => 'en',
+            ]);
+
+            if (!empty($existing)) {
+                $post_id = $existing[0];
+            }
 
             if (!$post_id) {
+                error_log("Creating new listing: " . $post_title);
                 $post_id = wp_insert_post([
                     'post_type' => 'listing',
-                    'post_status' => 'publish',
                     'post_title' => $post_title,
                     'post_name' => $slug,
                     'post_content' => $description,
+                    'post_status'  => $post_status,
+                ]);
+            } else {
+                // Update post title, slug, and content
+                wp_update_post([
+                    'ID'           => $post_id,
+                    'post_title'   => $post_title,
+                    'post_name'    => $slug,
+                    'post_content' => $description,
+                    'post_status'  => $post_status,
                 ]);
             }
 
             if (!$post_id || is_wp_error($post_id)) continue;
 
-            // Store for later reference
-            self::$listing_map[$slug] = $post_id;
+            // Save ID of imported listing
+            $imported_ids[] = $causeway_id;
 
             // ACF Meta
             update_field('causeway_id', $causeway_id, $post_id);
@@ -458,7 +480,6 @@ class Causeway_Importer {
             update_field('opengraph_description', $item['opengraph_description'] ?? '', $post_id);
             update_field('activated_at', $item['activated_at'] ?? '', $post_id);
             update_field('expired_at', $item['expired_at'] ?? '', $post_id);
-
             update_field('tripadvisor_url', $item['tripadvisor_url'] ?? '', $post_id);
             update_field('tripadvisor_id', $item['tripadvisor_id'] ?? '', $post_id);
             update_field('tripadvisor_rating_url', $item['tripadvisor_rating_url'] ?? '', $post_id);
@@ -551,13 +572,13 @@ class Causeway_Importer {
             }
             update_field('dates', $dates, $post_id);
 
-            // error_log("✅ Added Listing: " . $post_title . " (ID: $post_id)");
+            // error_log("✅ Updated Listing: " . $post_title . " (ID: $post_id)");
         }
 
         // error_log("Assigning related listings...");
         // TODO Assign related listings (matt not currently sending them via api)
         // foreach ($listings as $item) {
-        //     $post_id = self::$listing_map[$item['slug']] ?? null;
+        //     $post_id = self::$listing_map[$item['slug']] ?? nul;
         //     if (!$post_id) continue;
 
         //     $related_ids = [];
@@ -576,29 +597,42 @@ class Causeway_Importer {
 
         error_log('✅ Listings imported. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
 
-        $imported_ids = array_column($listings, 'id');
         self::delete_old_listings($imported_ids);
     }
 
     private static function delete_old_listings($imported_ids) {
-        // Query all existing listings with causeway_id
-        $existing_listings = get_posts([
-            'post_type'      => 'listing',
-            'posts_per_page' => -1,
-            'post_status'    => 'any',
-            'meta_key'       => 'causeway_id',
-            'fields'         => 'ids',
-        ]);
+        error_log("Deleting old listings...");
 
-        foreach ($existing_listings as $post_id) {
-            $existing_causeway_id = get_field('causeway_id', $post_id);
-            
-            // If not in imported list, delete it
-            if (!in_array((int)$existing_causeway_id, $imported_ids, true)) {
-                wp_delete_post($post_id, true); // true = force delete / false = move to trash
-                error_log("🗑️ Deleted stale listing with ID: $post_id and Causeway ID: $existing_causeway_id");
+        if (empty($imported_ids)) {
+            error_log("⚠️ No imported IDs provided. Skipping deletion.");
+            return;
+        }
+
+        // Make a fast lookup set
+        $imported_ids_map = array_flip(array_map('intval', $imported_ids));
+
+        global $wpdb;
+
+        // Query all listings with causeway_id and their post ID + meta value in one go
+        $results = $wpdb->get_results("
+            SELECT p.ID, pm.meta_value as causeway_id
+            FROM {$wpdb->posts} p
+            JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+            WHERE p.post_type = 'listing'
+            AND pm.meta_key = 'causeway_id'
+        ");
+
+        foreach ($results as $row) {
+            $post_id = (int) $row->ID;
+            $causeway_id = (int) $row->causeway_id;
+
+            if (!isset($imported_ids_map[$causeway_id])) {
+                wp_delete_post($post_id, true);
+                error_log("🗑️ Deleted stale listing with ID: $post_id and Causeway ID: $causeway_id");
             }
         }
+
+        return;
     }
 
     public static function export_listings() {
@@ -627,6 +661,8 @@ class Causeway_Importer {
             } else {
                 error_log('✅ Public site received data at ' . $endpoint);
             }
+
+            return;
         }
     }
 
