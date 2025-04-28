@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<wpml-config>
+    <custom-types>
+        <custom-type translate="1">listing</custom-type>
+    </custom-types>
+    <taxonomies>
+        <taxonomy translate="1">category</taxonomy>
+        <taxonomy translate="1">post_tag</taxonomy>
+        <taxonomy translate="1">listing-type</taxonomy>
+        <taxonomy translate="1">listing-campaigns</taxonomy>
+        <taxonomy translate="1">listings-category</taxonomy>
+        <taxonomy translate="1">listings-seasons</taxonomy>
+        <taxonomy translate="1">listings-amenities</taxonomy>
+        <taxonomy translate="0">listing-areas</taxonomy>
+        <taxonomy translate="0">listing-communities</taxonomy>
+        <taxonomy translate="0">listing-regions</taxonomy>
+        <taxonomy translate="0">listing-counties</taxonomy>
+    </taxonomies>
+  <custom-fields>
+    <!-- Copy fields (IDs, tokens, URLs, etc.) -->
+    <custom-field action="copy">causeway_id</custom-field>
+    <custom-field action="copy">tripadvisor_id</custom-field>
+    <custom-field action="copy">tripadvisor_url</custom-field>
+    <custom-field action="copy">tripadvisor_rating_url</custom-field>
+    <custom-field action="copy">tripadvisor_count</custom-field>
+    <custom-field action="copy">provider</custom-field>
+    <custom-field action="copy">status</custom-field>
+    <custom-field action="copy">is_featured</custom-field>
+    <custom-field action="copy">causeway_api_token</custom-field>
+    <custom-field action="copy">causeway_public_url</custom-field>
+    <custom-field action="copy">headless_api_secret</custom-field>
+    <custom-field action="copy">icon</custom-field>
+    <custom-field action="copy">related_communities</custom-field>
+    <custom-field action="copy">related_areas</custom-field>
+    <custom-field action="copy">related_regions</custom-field>
+    <custom-field action="copy">email</custom-field>
+    <custom-field action="copy">phone_primary</custom-field>
+    <custom-field action="copy">phone_secondary</custom-field>
+    <custom-field action="copy">phone_offseason</custom-field>
+    <custom-field action="copy">phone_tollfree</custom-field>
+    <custom-field action="copy">price</custom-field>
+    <custom-field action="copy">contact_name</custom-field>
+    <custom-field action="copy">activated_at</custom-field>
+    <custom-field action="copy">expired_at</custom-field>
+    <custom-field action="copy">websites</custom-field>
+    <custom-field action="copy">attachments</custom-field>
+    <custom-field action="copy">location_details</custom-field>
+    <custom-field action="copy">dates</custom-field>
+    <custom-field action="copy">listing_type</custom-field>
+
+    <!-- Translate fields -->
+    <custom-field action="translate">opengraph_title</custom-field>
+    <custom-field action="translate">opengraph_description</custom-field>
+    <custom-field action="translate">highlights</custom-field>
+    <custom-field action="translate">related_listings</custom-field>
+  </custom-fields>
+</wpml-config>

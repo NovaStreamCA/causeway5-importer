@@ -419,7 +419,7 @@ class Causeway_Importer {
             $description = $item['description'] ?? '';
             $causeway_id = $item['id'] ?? null;
             $post_status = strtolower($item['status'] ?? '') === 'published' ? 'publish' : 'draft';
-
+            $post_id = false;
             // error_log("Starting listing " . $post_title);
 
             if (!$post_title || !$slug || !$causeway_id || $post_status !== 'publish') continue;
@@ -636,6 +636,7 @@ class Causeway_Importer {
     }
 
     public static function export_listings() {
+        error_log("Start Export");
         // Notify public site to re-fetch causeway data
         $public_url = get_field('causeway_public_url', 'option');
         $secret = get_field('headless_api_secret', 'option');
@@ -663,6 +664,8 @@ class Causeway_Importer {
             }
 
             return;
+        } else {
+            error_log("❌ Public URL not set. Cannot notify.");
         }
     }
 
