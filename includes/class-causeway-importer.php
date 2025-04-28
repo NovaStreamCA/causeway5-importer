@@ -398,7 +398,6 @@ class Causeway_Importer {
             'headers' => ['Authorization' => 'Bearer ' . self::get_token()],
             'timeout' => 1200,
         ]);
-        error_log('✅ Received listings from API. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
 
         if (is_wp_error($response)) {
             error_log('❌ Failed to fetch listings');
@@ -412,6 +411,9 @@ class Causeway_Importer {
             error_log(print_r($listings, true));
             return;
         }
+
+        $listings_count = is_array($listings) ? count($listings) : 0;
+        error_log('✅ Received '. $listings_count .' listings from API. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
 
         foreach ($listings as $item) {
             $post_title = $item['name'] ?? '';
@@ -469,6 +471,7 @@ class Causeway_Importer {
             update_field('status', $item['status'] ?? '', $post_id);
             update_field('highlights', $item['highlights'] ?? '', $post_id);
             update_field('email', $item['email'] ?? '', $post_id);
+            update_field('metaline', $item['meta'] ?? '', $post_id);
             update_field('contact_name', $item['contact_name'] ?? '', $post_id);
             update_field('phone_primary', $item['phone_primary'] ?? '', $post_id);
             update_field('phone_secondary', $item['phone_secondary'] ?? '', $post_id);
@@ -595,7 +598,8 @@ class Causeway_Importer {
         //     }
         // }
 
-        error_log('✅ Listings imported. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+        $import_count = is_array($imported_ids) ? count($imported_ids) : 0;
+        error_log('✅ Imported ' . $import_count . ' of ' . $listings_count . ' listings @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
 
         self::delete_old_listings($imported_ids);
     }
@@ -610,30 +614,37 @@ class Causeway_Importer {
 
         // Make a fast lookup set
         $imported_ids_map = array_flip(array_map('intval', $imported_ids));
+        $deleted_count = 0;
 
         global $wpdb;
 
-        // Query all listings with causeway_id and their post ID + meta value in one go
+        // Query all listings with causeway_id (can be NULL) and their post ID
         $results = $wpdb->get_results("
             SELECT p.ID, pm.meta_value as causeway_id
             FROM {$wpdb->posts} p
-            JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+            LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'causeway_id'
             WHERE p.post_type = 'listing'
-            AND pm.meta_key = 'causeway_id'
+            AND p.post_status != 'trash'
         ");
 
         foreach ($results as $row) {
             $post_id = (int) $row->ID;
-            $causeway_id = (int) $row->causeway_id;
+            $causeway_id = isset($row->causeway_id) ? (int) $row->causeway_id : null;
 
-            if (!isset($imported_ids_map[$causeway_id])) {
+            // Delete if no causeway_id OR causeway_id not in imported_ids
+            if (is_null($causeway_id) || !isset($imported_ids_map[$causeway_id])) {
                 wp_delete_post($post_id, true);
-                error_log("🗑️ Deleted stale listing with ID: $post_id and Causeway ID: $causeway_id");
+                $reason = is_null($causeway_id) ? 'no Causeway ID' : "stale Causeway ID: $causeway_id";
+                error_log("🗑️ Deleted listing ID: $post_id ($reason)");
+                $deleted_count++;
             }
         }
+        
+        error_log("🗑️ Deleted ".$deleted_count." listings");
 
         return;
     }
+
 
     public static function export_listings() {
         error_log("Start Export");

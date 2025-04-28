@@ -53,5 +53,6 @@
     <custom-field action="translate">opengraph_description</custom-field>
     <custom-field action="translate">highlights</custom-field>
     <custom-field action="translate">related_listings</custom-field>
+    <custom-field action="translate">metaline</custom-field>
   </custom-fields>
 </wpml-config>

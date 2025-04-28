@@ -313,6 +313,7 @@ function causeway_register_acf_fields() {
                 ['key' => 'field_status', 'label' => 'Status', 'name' => 'status', 'type' => 'text'],
                 ['key' => 'field_highlights', 'label' => 'Highlights', 'name' => 'highlights', 'type' => 'textarea'],
                 ['key' => 'field_email', 'label' => 'Email', 'name' => 'email', 'type' => 'email'],
+                ['key' => 'field_metaline', 'label' => 'Meta', 'name' => 'metaline', 'type' => 'text'],
                 ['key' => 'field_phone_primary', 'label' => 'Phone Primary', 'name' => 'phone_primary', 'type' => 'text'],
                 ['key' => 'field_phone_secondary', 'label' => 'Phone Secondary', 'name' => 'phone_secondary', 'type' => 'text'],
                 ['key' => 'field_phone_offseason', 'label' => 'Phone Offseason', 'name' => 'phone_offseason', 'type' => 'text'],

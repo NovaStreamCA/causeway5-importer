@@ -59,6 +59,7 @@ function get_listings($request) {
             'phone_offseason'=> $acf['phone_offseason'] ?? null,
             'phone_tollfree' => $acf['phone_tollfree'] ?? null,
             'email'          => $acf['email'] ?? null,
+            'meta'          => $acf['metaline'] ?? null,
             'status'         => $acf['status'] ?? 'Draft',
             'provider'       => $acf['provider'] ?? 'Causeway',
             'tripadvisor_id'         => $acf['tripadvisor_id'] ?? null,
@@ -102,8 +103,16 @@ function get_listings($request) {
                         'description' => $translated_description,
                     ];
 
-                    if($translated_acf && $translated_acf['highlights']) {
-                        $listing['translations'][$lang_code]['highlights'] = html_entity_decode($translated_acf['highlights']);
+                    if($translated_acf) {
+
+                        if($translated_acf['highlights']) {
+                            $listing['translations'][$lang_code]['highlights'] = html_entity_decode($translated_acf['highlights']);
+                        }
+
+                        if($translated_acf['metaline']) {
+                            $listing['translations'][$lang_code]['meta'] = html_entity_decode($translated_acf['metaline']);
+                        }
+
                     }
                 } else {
                     $listing['translations'][$lang_code] = [];
