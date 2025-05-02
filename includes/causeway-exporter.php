@@ -104,15 +104,13 @@ function get_listings($request) {
                     ];
 
                     if($translated_acf) {
-
-                        if($translated_acf['highlights']) {
+                        if((array_key_exists('highlights', $translated_acf)) ) {
                             $listing['translations'][$lang_code]['highlights'] = html_entity_decode($translated_acf['highlights']);
                         }
 
-                        if($translated_acf['metaline']) {
+                        if((array_key_exists('metaline', $translated_acf))) {
                             $listing['translations'][$lang_code]['meta'] = html_entity_decode($translated_acf['metaline']);
                         }
-
                     }
                 } else {
                     $listing['translations'][$lang_code] = [];
