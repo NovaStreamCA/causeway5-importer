@@ -583,8 +583,7 @@ class Causeway_Importer {
         }
 
         error_log("Assigning related listings...");
-        // TODO Assign related listings (matt not currently sending them via api)
-        
+        // TODO matt does not need to send the entire related listing object, just the slug OR ID
         foreach ($listings as $item) {
             $post_id = self::$listing_map[$item['slug']] ?? null;
             if (!$post_id) continue;
