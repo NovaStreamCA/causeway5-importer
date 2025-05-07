@@ -6,6 +6,8 @@ class Causeway_Importer {
     private static $counties = [];
     private static $listing_map = [];
     private static $start;
+    private static $baseURL = 'https://api-causeway5.novastream.dev/';
+    
 
     private static function get_token() {
         return get_field('causeway_api_token', 'option');
@@ -46,7 +48,7 @@ class Causeway_Importer {
     }
 
     private static function fetch_remote($endpoint) {
-        $url = 'https://api-causeway5.novastream.dev/' . $endpoint;
+        $url = self::$baseURL . $endpoint;
         $response = wp_remote_get($url, [
             'headers' => [
                 'Authorization' => 'Bearer ' . self::get_token(),
@@ -60,7 +62,7 @@ class Causeway_Importer {
 
     private static function import_types() {
         error_log('Import types...');
-        $response = wp_remote_get('https://api-causeway5.novastream.dev/listing-types', [
+        $response = wp_remote_get(self::$baseURL.'listing-types', [
             'headers' => [
                 'Authorization' => 'Bearer '. self::get_token(),
             ],
@@ -109,7 +111,7 @@ class Causeway_Importer {
     private static function import_categories() {
         error_log('Importing categories...');
 
-        $response = wp_remote_get('https://api-causeway5.novastream.dev/categories', [
+        $response = wp_remote_get(self::$baseURL.'categories', [
             'headers' => [
                 'Authorization' => 'Bearer '. self::get_token(),
             ],
@@ -186,7 +188,7 @@ class Causeway_Importer {
     private static function import_amenities() {
         error_log('Importing amenities...');
 
-        $response = wp_remote_get('https://api-causeway5.novastream.dev/amenities', [
+        $response = wp_remote_get(self::$baseURL.'amenities', [
             'headers' => [
                 'Authorization' => 'Bearer '. self::get_token(),
             ],
@@ -246,7 +248,7 @@ class Causeway_Importer {
     private static function import_campaigns() {
         error_log('Importing campaigns...');
 
-        $response = wp_remote_get('https://api-causeway5.novastream.dev/campaigns', [
+        $response = wp_remote_get(self::$baseURL.'campaigns', [
             'headers' => [
                 'Authorization' => 'Bearer ' . self::get_token(),
             ],
@@ -394,7 +396,7 @@ class Causeway_Importer {
         error_log('Importing listings..');
         $imported_ids = [];
         
-        $response = wp_remote_get('https://api-causeway5.novastream.dev/listings?search=listings.status&compare==&value=Published', [
+        $response = wp_remote_get(self::$baseURL.'listings?search=listings.status&compare==&value=Published', [
             'headers' => ['Authorization' => 'Bearer ' . self::get_token()],
             'timeout' => 1200,
         ]);
@@ -461,6 +463,8 @@ class Causeway_Importer {
             }
 
             if (!$post_id || is_wp_error($post_id)) continue;
+
+            self::$listing_map[$slug] = $post_id;
 
             // Save ID of imported listing
             $imported_ids[] = $causeway_id;
@@ -578,25 +582,34 @@ class Causeway_Importer {
             // error_log("✅ Updated Listing: " . $post_title . " (ID: $post_id)");
         }
 
-        // error_log("Assigning related listings...");
+        error_log("Assigning related listings...");
         // TODO Assign related listings (matt not currently sending them via api)
-        // foreach ($listings as $item) {
-        //     $post_id = self::$listing_map[$item['slug']] ?? nul;
-        //     if (!$post_id) continue;
+        
+        foreach ($listings as $item) {
+            $post_id = self::$listing_map[$item['slug']] ?? null;
+            if (!$post_id) continue;
 
-        //     $related_ids = [];
-        //     foreach ($item['related'] ?? [] as $related) {
-        //         $related_slug = $related['slug'] ?? null;
-        //         $related_post_id = self::$listing_map[$related_slug] ?? null;
-        //         if ($related_post_id) {
-        //             $related_ids[] = $related_post_id;
-        //         }
-        //     }
+            $related_ids = [];
 
-        //     if (!empty($related_ids)) {
-        //         update_field('related_listings', $related_ids, $post_id);
-        //     }
-        // }
+            foreach ($item['related'] ?? [] as $related) {
+                if (!is_array($related)) continue;
+
+                $related_slug = $related['slug'] ?? null;
+                if (!$related_slug) continue;
+
+                $related_post_id = self::$listing_map[$related_slug] ?? null;
+                if ($related_post_id) {
+                    $related_ids[] = $related_post_id;
+                } else {
+                    error_log("⚠️ Related listing not found: $related_slug for {$item['slug']}");
+                }
+            }
+
+            if (!empty($related_ids)) {
+                error_log("✅ Assigning " . count($related_ids) . " related listings to {$item['slug']} (ID: $post_id)");
+                update_field('related_listings', $related_ids, $post_id);
+            }
+        }
 
         $import_count = is_array($imported_ids) ? count($imported_ids) : 0;
         error_log('✅ Imported ' . $import_count . ' of ' . $listings_count . ' listings @ ' . round(microtime(true) - self::$start, 2) . ' seconds');

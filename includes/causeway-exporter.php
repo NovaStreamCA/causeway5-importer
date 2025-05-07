@@ -81,6 +81,18 @@ function get_listings($request) {
             'dates'         => format_dates($acf['dates'] ?? []),
         ];
 
+        $related_posts = get_field('related_listings', $id) ?: [];
+        error_log('Related posts: ' . print_r($related_posts, true));
+
+        $related_ids = array_map(function ($p) {
+            return get_field('causeway_id', $p) ?: $p;
+        }, $related_posts);
+
+        error_log('Related IDs: ' . print_r($related_ids, true));
+
+        $listing['related'] = $related_ids;
+
+
         // 🔁 Add translations for frontend fields only
         if (function_exists('icl_object_id')) {
             $languages = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
@@ -97,7 +109,7 @@ function get_listings($request) {
                 // $translated_title = html_entity_decode(get_the_title($translated_post));
                 $translated_description = html_entity_decode(apply_filters('the_content', $translated_post->post_content));
 
-                if($translated_acf || $translated_title || $translated_description) {
+                if($translated_acf || $translated_description) {
                     $listing['translations'][$lang_code] = [
                         // 'name'        => $translated_title,
                         'description' => $translated_description,
