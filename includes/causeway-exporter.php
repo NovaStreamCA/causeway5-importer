@@ -226,9 +226,17 @@ function get_taxonomy_terms_with_acf($request) {
     foreach ($terms as $term) {
         $term_id = $term->term_id;
         $acf = get_fields($taxonomy . '_' . $term_id) ?: [];
+        error_log("Term ID: $term_id, ACF: " . print_r($acf[$taxonomy . '_attachments'], true));
 
         $causeway_id = isset($acf['causeway_id']) ? (int)$acf['causeway_id'] : $term_id;
         $term_id_to_causeway_id[$term_id] = $causeway_id;
+        $attachments = [];
+
+        if (!empty($acf['area_attachments']) && is_array($acf['area_attachments'])) {
+            $attachments = $acf['area_attachments'];
+        } elseif (!empty($acf['category_attachments']) && is_array($acf['category_attachments'])) {
+            $attachments = $acf['category_attachments'];
+        }
 
         $relationships = format_related_acf_ids([
             'related_communities' => 'listing-communities',
@@ -242,7 +250,9 @@ function get_taxonomy_terms_with_acf($request) {
             $acf['related_communities'],
             $acf['related_areas'],
             $acf['related_regions'],
-            $acf['listing_type']
+            $acf['listing_type'],
+            $acf['area_attachments'],
+            $acf['category_attachments']
         );
 
         $term_data = [
@@ -250,6 +260,7 @@ function get_taxonomy_terms_with_acf($request) {
             'name'   => html_entity_decode($term->name),
             'slug'   => $term->slug,
             'parent' => null, // to be set after
+            'attachments' => $attachments
         ];
 
         foreach ($relationships as $key => $val) {
