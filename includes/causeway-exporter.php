@@ -226,7 +226,6 @@ function get_taxonomy_terms_with_acf($request) {
     foreach ($terms as $term) {
         $term_id = $term->term_id;
         $acf = get_fields($taxonomy . '_' . $term_id) ?: [];
-        error_log("Term ID: $term_id, ACF: " . print_r($acf[$taxonomy . '_attachments'], true));
 
         $causeway_id = isset($acf['causeway_id']) ? (int)$acf['causeway_id'] : $term_id;
         $term_id_to_causeway_id[$term_id] = $causeway_id;
