@@ -44,6 +44,8 @@
     <custom-field action="copy">expired_at</custom-field>
     <custom-field action="copy">websites</custom-field>
     <custom-field action="copy">attachments</custom-field>
+    <custom-field action="copy">area_attachments</custom-field>
+    <custom-field action="copy">category_attachments</custom-field>
     <custom-field action="copy">location_details</custom-field>
     <custom-field action="copy">dates</custom-field>
     <custom-field action="copy">listing_type</custom-field>

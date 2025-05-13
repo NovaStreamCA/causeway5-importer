@@ -82,16 +82,12 @@ function get_listings($request) {
         ];
 
         $related_posts = get_field('related_listings', $id) ?: [];
-        error_log('Related posts: ' . print_r($related_posts, true));
-
         $related_ids = array_map(function ($p) {
             return get_field('causeway_id', $p) ?: $p;
         }, $related_posts);
 
-        error_log('Related IDs: ' . print_r($related_ids, true));
 
         $listing['related'] = $related_ids;
-
 
         // 🔁 Add translations for frontend fields only
         if (function_exists('icl_object_id')) {

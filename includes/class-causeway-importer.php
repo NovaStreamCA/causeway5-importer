@@ -179,6 +179,20 @@ class Causeway_Importer {
                 if ($type_term) {
                     update_field('listing_type', $type_term->term_id, 'listings-category_' . $term_id);
                 }
+
+                // asd attachments Repeater
+                if (!empty($item['attachments']) && is_array($item['attachments'])) {
+                    // Attachments Repeater
+                    $attachments = [];
+                    foreach ($item['attachments'] ?? [] as $a) {
+                        $attachments[] = [
+                            'url' => $a['url'] ?? '',
+                            'category' => $a['category'] ?? '',
+                            'alt' => $a['alt'] ?? '',
+                        ];
+                    }
+                    update_field('category_attachments', $attachments, 'listings-category_' . $term_id);
+                }
             }
         }
 
@@ -291,10 +305,11 @@ class Causeway_Importer {
         error_log('Importing seasons...');
 
         $seasons = [
-            ['id' => 1, 'name' => 'Spring'],
-            ['id' => 2, 'name' => 'Summer'],
-            ['id' => 3, 'name' => 'Fall'],
-            ['id' => 4, 'name' => 'Winter'],
+            ['id' => 1, 'name' => 'Select Season'],
+            ['id' => 2, 'name' => 'Spring'],
+            ['id' => 3, 'name' => 'Summer'],
+            ['id' => 4, 'name' => 'Fall'],
+            ['id' => 5, 'name' => 'Winter'],
         ];
 
         foreach ($seasons as $item) {
@@ -335,6 +350,19 @@ class Causeway_Importer {
             }
 
             update_field('causeway_id', $causeway_id, $taxonomy . '_' . $term_id);
+
+            if (!empty($item['attachments']) && is_array($item['attachments'])) {
+                // Attachments Repeater
+                $attachments = [];
+                foreach ($item['attachments'] ?? [] as $a) {
+                    $attachments[] = [
+                        'url' => $a['url'] ?? '',
+                        'category' => $a['category'] ?? '',
+                        'alt' => $a['alt'] ?? '',
+                    ];
+                }
+                update_field('area_attachments', $attachments, $taxonomy . '_' . $term_id);
+            }
         }
 
         error_log('✅ '.$taxonomy.' imported. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');

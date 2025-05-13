@@ -68,6 +68,18 @@ function causeway_register_acf_fields() {
                     'name' => 'causeway_id',
                     'type' => 'number',
                 ],
+                
+                [
+                    'key' => 'field_category_attachments',
+                    'label' => 'Attachments',
+                    'name' => 'category_attachments',
+                    'type' => 'repeater',
+                    'sub_fields' => [
+                        ['key' => 'field_attachment_url', 'label' => 'URL', 'name' => 'url', 'type' => 'url'],
+                        ['key' => 'field_attachment_category', 'label' => 'Category', 'name' => 'category', 'type' => 'text'],
+                        ['key' => 'field_attachment_alt', 'label' => 'Alt Text', 'name' => 'alt', 'type' => 'text'],
+                    ],
+                ],
             ],
             'location' => [
                 [
@@ -139,6 +151,17 @@ function causeway_register_acf_fields() {
                     'type' => 'number',
                     'readonly' => 1,
                     'wrapper' => ['width' => '50'],
+                ],
+                [
+                    'key' => 'field_area_attachments',
+                    'label' => 'Attachments',
+                    'name' => 'area_attachments',
+                    'type' => 'repeater',
+                    'sub_fields' => [
+                        ['key' => 'field_attachment_url', 'label' => 'URL', 'name' => 'url', 'type' => 'url'],
+                        ['key' => 'field_attachment_category', 'label' => 'Category', 'name' => 'category', 'type' => 'text'],
+                        ['key' => 'field_attachment_alt', 'label' => 'Alt Text', 'name' => 'alt', 'type' => 'text'],
+                    ],
                 ],
             ],
             'location' => [
