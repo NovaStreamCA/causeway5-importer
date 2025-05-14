@@ -9,9 +9,9 @@ class Causeway_Importer {
     private static $baseURL = 'https://api-causeway5.novastream.dev/';
     
 
-    private static function get_token() {
-        return get_field('causeway_api_token', 'option');
-    }
+    // private static function get_token() {
+    //     return get_field('causeway_api_token', 'option');
+    // }
 
     public static function import() {
         error_log('start import');
@@ -49,11 +49,13 @@ class Causeway_Importer {
 
     private static function fetch_remote($endpoint) {
         $url = self::$baseURL . $endpoint;
-        $response = wp_remote_get($url, [
-            'headers' => [
-                'Authorization' => 'Bearer ' . self::get_token(),
-            ],
-        ]);
+        // $response = wp_remote_get($url, [
+        //     'headers' => [
+        //         'Authorization' => 'Bearer ' . self::get_token(),
+        //     ],
+        // ]);
+
+        $response = wp_remote_get($url);
 
         if (is_wp_error($response)) return [];
         $data = json_decode(wp_remote_retrieve_body($response), true);
@@ -62,11 +64,12 @@ class Causeway_Importer {
 
     private static function import_types() {
         error_log('Import types...');
-        $response = wp_remote_get(self::$baseURL.'listing-types', [
-            'headers' => [
-                'Authorization' => 'Bearer '. self::get_token(),
-            ],
-        ]);
+        // $response = wp_remote_get(self::$baseURL.'listing-types', [
+        //     'headers' => [
+        //         'Authorization' => 'Bearer '. self::get_token(),
+        //     ],
+        // ]);
+         $response = wp_remote_get(self::$baseURL.'listing-types');
 
         if (is_wp_error($response)) {
             error_log('ERROR: ' . print_r($response, true));
@@ -111,11 +114,13 @@ class Causeway_Importer {
     private static function import_categories() {
         error_log('Importing categories...');
 
-        $response = wp_remote_get(self::$baseURL.'categories', [
-            'headers' => [
-                'Authorization' => 'Bearer '. self::get_token(),
-            ],
-        ]);
+        // $response = wp_remote_get(self::$baseURL.'categories', [
+        //     'headers' => [
+        //         'Authorization' => 'Bearer '. self::get_token(),
+        //     ],
+        // ]);
+
+         $response = wp_remote_get(self::$baseURL.'categories');
 
         if (is_wp_error($response)) {
             error_log('Error fetching categories');
@@ -200,18 +205,14 @@ class Causeway_Importer {
     }
 
     private static function import_amenities() {
-        error_log('Importing amenities...');
+        $url = self::$baseURL . 'amenities';
 
-        $response = wp_remote_get(self::$baseURL.'amenities', [
-            'headers' => [
-                'Authorization' => 'Bearer '. self::get_token(),
-            ],
-        ]);
-
+        $response = wp_remote_get(self::$baseURL . 'amenities');
         if (is_wp_error($response)) {
             error_log('❌ Failed to fetch amenities');
             return;
         }
+        $response_body = wp_remote_retrieve_body($response);
 
         $data = json_decode(wp_remote_retrieve_body($response), true);
         if (!is_array($data)) {
@@ -262,11 +263,12 @@ class Causeway_Importer {
     private static function import_campaigns() {
         error_log('Importing campaigns...');
 
-        $response = wp_remote_get(self::$baseURL.'campaigns', [
-            'headers' => [
-                'Authorization' => 'Bearer ' . self::get_token(),
-            ],
-        ]);
+        // $response = wp_remote_get(self::$baseURL.'campaigns', [
+        //     'headers' => [
+        //         'Authorization' => 'Bearer ' . self::get_token(),
+        //     ],
+        // ]);
+        $response = wp_remote_get(self::$baseURL.'campaigns');
 
         if (is_wp_error($response)) return;
 
@@ -424,8 +426,12 @@ class Causeway_Importer {
         error_log('Importing listings..');
         $imported_ids = [];
         
+        // $response = wp_remote_get(self::$baseURL.'listings?search=listings.status&compare==&value=Published', [
+        //     'headers' => ['Authorization' => 'Bearer ' . self::get_token()],
+        //     'timeout' => 1200,
+        // ]);
+
         $response = wp_remote_get(self::$baseURL.'listings?search=listings.status&compare==&value=Published', [
-            'headers' => ['Authorization' => 'Bearer ' . self::get_token()],
             'timeout' => 1200,
         ]);
 

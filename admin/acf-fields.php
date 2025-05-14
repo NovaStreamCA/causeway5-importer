@@ -456,14 +456,14 @@ function causeway_register_acf_fields() {
             'key' => 'group_causeway_settings',
             'title' => 'Causeway Import Settings',
             'fields' => [
-                [
-                    'key' => 'field_causeway_token',
-                    'label' => 'API Token',
-                    'name' => 'causeway_api_token',
-                    'type' => 'text',
-                    'instructions' => 'Paste the Causeway API token here.',
-                    'required' => 1,
-                ],
+                // [
+                //     'key' => 'field_causeway_token',
+                //     'label' => 'API Token',
+                //     'name' => 'causeway_api_token',
+                //     'type' => 'text',
+                //     'instructions' => 'Paste the Causeway API token here.',
+                //     'required' => 1,
+                // ],
                 [
                     'key' => 'field_causeway_public_url',
                     'label' => 'Public Website URL',
