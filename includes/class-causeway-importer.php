@@ -15,6 +15,7 @@ class Causeway_Importer {
 
     public static function import() {
         error_log('start import');
+        define('CAUSEWAY_IMPORTING', true);
         self::$start = microtime(true);
 
         // Preload and cache calls that would be used multiple times
