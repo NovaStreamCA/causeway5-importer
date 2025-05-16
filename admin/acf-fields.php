@@ -367,6 +367,12 @@ function causeway_register_acf_fields() {
                     'type' => 'url',
                 ],
                 [
+                    'key' => 'field_tripadvisor_rating',
+                    'label' => 'TripAdvisor Rating',
+                    'name' => 'tripadvisor_rating',
+                    'type' => 'number',
+                ],
+                [
                     'key' => 'field_tripadvisor_count',
                     'label' => 'TripAdvisor Review Count',
                     'name' => 'tripadvisor_count',

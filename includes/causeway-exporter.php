@@ -65,6 +65,7 @@ function get_listings($request) {
             'tripadvisor_id'         => $acf['tripadvisor_id'] ?? null,
             'tripadvisor_url'        => $acf['tripadvisor_url'] ?? null,
             'tripadvisor_rating_url' => $acf['tripadvisor_rating_url'] ?? null,
+            'tripadvisor_rating' => $acf['tripadvisor_rating'] ?? null,
             'tripadvisor_count'      => $acf['tripadvisor_count'] ?? null,
             'activated_at'  => $acf['activated_at'] ?? null,
             'expired_at'    => $acf['expired_at'] ?? null,

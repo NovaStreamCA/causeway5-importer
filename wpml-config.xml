@@ -22,6 +22,7 @@
     <custom-field action="copy">tripadvisor_id</custom-field>
     <custom-field action="copy">tripadvisor_url</custom-field>
     <custom-field action="copy">tripadvisor_rating_url</custom-field>
+    <custom-field action="copy">tripadvisor_rating</custom-field>
     <custom-field action="copy">tripadvisor_count</custom-field>
     <custom-field action="copy">provider</custom-field>
     <custom-field action="copy">status</custom-field>

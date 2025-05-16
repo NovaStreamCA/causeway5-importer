@@ -525,6 +525,7 @@ class Causeway_Importer {
             update_field('tripadvisor_url', $item['tripadvisor_url'] ?? '', $post_id);
             update_field('tripadvisor_id', $item['tripadvisor_id'] ?? '', $post_id);
             update_field('tripadvisor_rating_url', $item['tripadvisor_rating_url'] ?? '', $post_id);
+            update_field('tripadvisor_rating', $item['tripadvisor_rating'] ?? '', $post_id);
             update_field('tripadvisor_count', $item['tripadvisor_count'] ?? '', $post_id);
 
             // Assign Taxonomies
