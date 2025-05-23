@@ -41,6 +41,8 @@ class Causeway_Importer {
         self::assign_community_areas_and_regions();
         self::assign_region_communities();
 
+        self::assign_area_slugs();
+
         self::import_listings();
 
         error_log('✅ Import Completed. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
@@ -383,6 +385,63 @@ class Causeway_Importer {
             }
 
             update_field('related_communities', $related, 'listing-areas_' . $term_id);
+        }
+    }
+
+    private static function assign_area_slugs(): void {
+        error_log('🏷 Updating area slugs from pages...');
+    
+        // Fetch all pages with a community ACF field
+        $totalPages = null;
+        $page = 1;
+        $perPage = 100;
+        $allPages = [];
+        
+        do {
+            $url = add_query_arg([
+                '_fields'      => 'id,slug',
+                'per_page'     => $perPage,
+                'page'         => $page,
+                'parent'       => 343,
+                'bypass_clean' => 1,
+            ], rest_url('wp/v2/pages'));
+
+            $response = wp_remote_get($url);
+
+            if (is_wp_error($response)) {
+                error_log('❌ WP Error: ' . $response->get_error_message());
+                break;
+            }
+
+            $headers = wp_remote_retrieve_headers($response);
+            if ($totalPages === null) {
+                $totalPages = (int) $headers['x-wp-totalpages'] ?? 0;
+                if ($totalPages === 0) break;
+            }
+
+            $data = json_decode(wp_remote_retrieve_body($response), true);
+            if (!is_array($data) || empty($data)) break;
+
+            $allPages = array_merge($allPages, $data);
+            $page++;
+        } while ($page <= $totalPages);
+
+        // Map community ID to page slug using get_field
+        $slugMap = [];
+        foreach ($allPages as $page) {
+            $communityId = get_field('community', $page['id']);
+            if ($communityId) {
+                $slugMap[(int)$communityId] = $page['slug'];
+            }
+        }
+
+        foreach(self::$areas as $area) {
+            $term_id = self::get_term_id_by_causeway_id('listing-areas', $area['id']);
+            if (!$term_id) continue;
+
+            if(isset($slugMap[$area['id']])) {
+                update_field('area_slug', $slugMap[$area['id']], 'listing-areas_' . $term_id);
+            }
         }
     }
 

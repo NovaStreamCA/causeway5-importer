@@ -275,11 +275,16 @@ function get_taxonomy_terms_with_acf($request) {
         $causeway_id = isset($acf['causeway_id']) ? (int)$acf['causeway_id'] : $term_id;
         $term_id_to_causeway_id[$term_id] = $causeway_id;
         $attachments = [];
+        $area_slug = null;
 
         if (!empty($acf['area_attachments']) && is_array($acf['area_attachments'])) {
             $attachments = $acf['area_attachments'];
         } elseif (!empty($acf['category_attachments']) && is_array($acf['category_attachments'])) {
             $attachments = $acf['category_attachments'];
+        }
+
+        if (!empty($acf['area_slug'])) {
+            $area_slug = $acf['area_slug'];
         }
 
         $relationships = format_related_acf_ids([
@@ -296,13 +301,14 @@ function get_taxonomy_terms_with_acf($request) {
             $acf['related_regions'],
             $acf['listing_type'],
             $acf['area_attachments'],
-            $acf['category_attachments']
+            $acf['category_attachments'],
+            $acf['area_slug']
         );
 
         $term_data = [
             'id'     => $causeway_id,
             'name'   => html_entity_decode($term->name),
-            'slug'   => $term->slug,
+            'slug' => $area_slug ?: $term->slug,
             'parent' => null, // to be set after
             'attachments' => $attachments
         ];

@@ -163,6 +163,7 @@ function causeway_register_acf_fields() {
                         ['key' => 'field_attachment_alt', 'label' => 'Alt Text', 'name' => 'alt', 'type' => 'text'],
                     ],
                 ],
+                ['key' => 'field_area_slug', 'label' => 'Area Slug', 'name' => 'area_slug', 'type' => 'text'],
             ],
             'location' => [
                 [

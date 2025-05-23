@@ -34,6 +34,7 @@
     <custom-field action="copy">related_communities</custom-field>
     <custom-field action="copy">related_areas</custom-field>
     <custom-field action="copy">related_regions</custom-field>
+    <custom-field action="copy">area_slug</custom-field>
     <custom-field action="copy">email</custom-field>
     <custom-field action="copy">phone_primary</custom-field>
     <custom-field action="copy">phone_secondary</custom-field>
