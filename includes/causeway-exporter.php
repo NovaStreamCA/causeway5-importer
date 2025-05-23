@@ -308,10 +308,14 @@ function get_taxonomy_terms_with_acf($request) {
         $term_data = [
             'id'     => $causeway_id,
             'name'   => html_entity_decode($term->name),
-            'slug' => $area_slug ?: $term->slug,
+            'slug' => $term->slug,
             'parent' => null, // to be set after
             'attachments' => $attachments
         ];
+
+        if($taxonomy === 'listing-areas') {
+            $term_data['area_slug'] = $area_slug;
+        }
 
         foreach ($relationships as $key => $val) {
             $term_data[$key] = $val;
