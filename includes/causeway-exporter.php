@@ -72,7 +72,7 @@ function get_listings($request) {
             'is_featured'   => (bool) ($acf['is_featured'] ?? false),
             'price'         => floatval($acf['price'] ?? 0),
             'types'         => get_terms_with_acf($id, 'listing-type'),
-            'categories'    => get_terms_with_acf($id, 'listings-category'),
+            'categories'    => get_terms_with_acf($id, 'listings-category', true),
             'amenities'     => get_terms_with_acf($id, 'listings-amenities'),
             'campaigns'     => get_terms_with_acf($id, 'listing-campaigns'),
             'seasons'       => get_terms_with_acf($id, 'listings-seasons'),
@@ -141,72 +141,116 @@ function get_listings($request) {
 
 // Helpers
 
-function get_terms_with_acf($post_id, $taxonomy) {
-    $terms = wp_get_post_terms($post_id, $taxonomy);
+/**
+ * Return the post’s terms enriched with ACF fields, relationships, translations,
+ * …and now the parent term (if any) in the shape:
+ *
+ * 'parent' => [
+ *     'id'           => int,
+ *     'name'         => string,
+ *     'slug'         => string,
+ *     'translations' => [ <lang> => [ id, name, slug, … ] ]
+ * ]
+ */
+function get_terms_with_acf( int $post_id, string $taxonomy, $include_parents = false ): array {
+    $terms  = wp_get_post_terms( $post_id, $taxonomy );
     $result = [];
 
-    foreach ($terms as $term) {
-        $acf = get_fields($taxonomy . '_' . $term->term_id) ?: [];
-        $causeway_id = isset($acf['causeway_id']) ? $acf['causeway_id'] : $term->term_id;
-
-        $relationship_fields = format_related_acf_ids([
-            'related_communities' => 'listing-communities',
-            'related_areas'       => 'listing-areas',
-            'related_regions'     => 'listing-regions',
-            'listing_type'        => 'listing-type',
-        ], $acf);
-
-        unset($acf['causeway_id'], $acf['related_communities'], $acf['related_areas'], $acf['related_regions'], $acf['listing_type']);
-
-        $item = [
-            'id'   => (int) $causeway_id,
-            'name' => html_entity_decode($term->name),
-            'slug' => $term->slug,
-        ];
-
-        foreach ($relationship_fields as $key => $value) {
-            $item[$key] = $value;
-        }
-
-        if (!empty($acf)) {
-            foreach ($acf as $key => $value) {
-                $item[$key] = $value;
-            }
-        }
-
-        // 🔁 Add translations for term
-        if (function_exists('icl_object_id')) {
-            $languages = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
-            if (!empty($languages)) {
-                foreach ($languages as $lang_code => $lang_info) {
-                    $translated_term_id = apply_filters('wpml_object_id', $term->term_id, $taxonomy, true, $lang_code);
-
-                    if (!$translated_term_id || $translated_term_id === $term->term_id) continue;
-
-                    $translated_term = get_term($translated_term_id, $taxonomy);
-                    if (!$translated_term || is_wp_error($translated_term)) continue;
-
-                    $translated_acf = get_fields($taxonomy . '_' . $translated_term_id);
-                    $translated_causeway_id = $translated_acf['causeway_id'] ?? $translated_term_id;
-
-                    if(!is_array($translated_acf)) {
-                        $translated_acf = [];
-                    }
-
-                    $item['translations'][$lang_code] = array_merge([
-                        'id'   => (int) $translated_causeway_id,
-                        'name' => html_entity_decode($translated_term->name),
-                        'slug' => $translated_term->slug,
-                    ], $translated_acf ?: []);
-                }
-            }
-        }
-
-        $result[] = $item;
+    foreach ( $terms as $term ) {
+        $result[] = build_term_tree( (int) $term->term_id, $taxonomy, $include_parents );
     }
 
     return $result;
 }
+
+
+/**
+ * Build a term payload and follow its parents recursively.
+ *
+ * @param  int      $term_id   The WP term ID.
+ * @param  string   $taxonomy  The taxonomy slug.
+ * @param  int[]    $seen      Internally prevents circular loops.
+ * @return array|null          Null if the term can’t be loaded.
+ */
+function build_term_tree( int $term_id, string $taxonomy, $include_parents, array &$seen = []): ?array {
+
+    /* ── guard: avoid infinite loops ───────────────────────────────────────── */
+    if ( in_array( $term_id, $seen, true ) ) {
+        return null;
+    }
+    $seen[] = $term_id;
+
+    /* ── fetch term ───────────────────────────────────────────────────────── */
+    $term = get_term( $term_id, $taxonomy );
+    if ( ! $term || is_wp_error( $term ) ) {
+        return null;
+    }
+
+    /* ── base + ACF ───────────────────────────────────────────────────────── */
+    $acf         = get_fields( "{$taxonomy}_{$term_id}" ) ?: [];
+    $causeway_id = $acf['causeway_id'] ?? $term_id;
+
+    // Extract + remove relationship fields you don’t want duplicated
+    $relationship_fields = format_related_acf_ids(
+        [
+            'related_communities' => 'listing-communities',
+            'related_areas'       => 'listing-areas',
+            'related_regions'     => 'listing-regions',
+            'listing_type'        => 'listing-type',
+        ],
+        $acf
+    );
+    unset(
+        $acf['causeway_id'],
+        $acf['related_communities'],
+        $acf['related_areas'],
+        $acf['related_regions'],
+        $acf['listing_type']
+    );
+
+    $node = [
+        'id'   => (int) $causeway_id,
+        'name' => html_entity_decode( $term->name ),
+        'slug' => $term->slug,
+    ] + $relationship_fields + $acf;
+
+    /* ── translations ─────────────────────────────────────────────────────── */
+    if ( function_exists( 'icl_object_id' ) ) {
+        $langs = apply_filters( 'wpml_active_languages', null, [ 'skip_missing' => 0 ] );
+        if ( $langs ) {
+            foreach ( $langs as $code => $info ) {
+                $t_id = apply_filters( 'wpml_object_id', $term_id, $taxonomy, true, $code );
+                if ( ! $t_id || $t_id === $term_id ) {
+                    continue;
+                }
+                $t_term = get_term( $t_id, $taxonomy );
+                if ( ! $t_term || is_wp_error( $t_term ) ) {
+                    continue;
+                }
+                $t_acf      = get_fields( "{$taxonomy}_{$t_id}" ) ?: [];
+                $t_causeway = $t_acf['causeway_id'] ?? $t_id;
+
+                $node['translations'][ $code ] = array_merge(
+                    [
+                        'id'   => (int) $t_causeway,
+                        'name' => html_entity_decode( $t_term->name ),
+                        'slug' => $t_term->slug,
+                    ],
+                    $t_acf ?: []
+                );
+            }
+        }
+    }
+
+    /* ── recurse into the parent ──────────────────────────────────────────── */
+    if($include_parents) {
+        $node['parent_object'] = $term->parent ? build_term_tree( (int) $term->parent, $taxonomy, $include_parents, $seen ) : null;
+    }
+    
+    return $node;
+}
+
+
 
 
 function get_taxonomy_terms_with_acf($request) {
