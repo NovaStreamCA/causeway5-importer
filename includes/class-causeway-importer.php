@@ -52,12 +52,6 @@ class Causeway_Importer {
 
     private static function fetch_remote($endpoint) {
         $url = self::$baseURL . $endpoint;
-        // $response = wp_remote_get($url, [
-        //     'headers' => [
-        //         'Authorization' => 'Bearer ' . self::get_token(),
-        //     ],
-        // ]);
-
         $response = wp_remote_get($url);
 
         if (is_wp_error($response)) return [];
@@ -67,12 +61,7 @@ class Causeway_Importer {
 
     private static function import_types() {
         error_log('Import types...');
-        // $response = wp_remote_get(self::$baseURL.'listing-types', [
-        //     'headers' => [
-        //         'Authorization' => 'Bearer '. self::get_token(),
-        //     ],
-        // ]);
-         $response = wp_remote_get(self::$baseURL.'listing-types');
+        $response = wp_remote_get(self::$baseURL.'listing-types');
 
         if (is_wp_error($response)) {
             error_log('ERROR: ' . print_r($response, true));
@@ -84,6 +73,8 @@ class Causeway_Importer {
             error_log('ERROR - data not array', $data);
             return;
         }
+
+        $imported_ids = [];
 
         foreach ($data as $item) {
             $name = $item['name'];
@@ -102,33 +93,27 @@ class Causeway_Importer {
                     'name' => $name,
                     'slug' => sanitize_title($name),
                 ]);
-                update_field('icon', $icon, 'listing-type_' . $term_id);
-                update_field('causeway_id', $causeway_id, 'listing-type_' . $term_id);
+                
             } else {
                 // Insert new term
                 $term = wp_insert_term($name, 'listing-type');
-
-                if (!is_wp_error($term)) {
-                    $term_id = $term['term_id'];
-                    update_field('icon', $icon, 'listing-type_' . $term_id);
-                    update_field('causeway_id', $causeway_id, 'listing-type_' . $term_id);
-                }
+                if (is_wp_error($term)) continue;
+                $term_id = $term['term_id'];
             }
+
+            $imported_ids[] = $causeway_id;
+            update_field('icon', $icon, 'listing-type_' . $term_id);
+            update_field('causeway_id', $causeway_id, 'listing-type_' . $term_id);
         }
+
+        self::delete_old_terms('listing-type', $imported_ids);
 
         error_log('✅ Types imported. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
     }
 
     private static function import_categories() {
         error_log('Importing categories...');
-
-        // $response = wp_remote_get(self::$baseURL.'categories', [
-        //     'headers' => [
-        //         'Authorization' => 'Bearer '. self::get_token(),
-        //     ],
-        // ]);
-
-         $response = wp_remote_get(self::$baseURL.'categories');
+        $response = wp_remote_get(self::$baseURL.'categories');
 
         if (is_wp_error($response)) {
             error_log('Error fetching categories');
@@ -140,6 +125,7 @@ class Causeway_Importer {
 
         // First pass: track all categories by causeway_id
         $lookup = [];
+        $imported_ids = [];
 
         foreach ($data as $item) {
             $causeway_id = $item['id'];
@@ -173,8 +159,6 @@ class Causeway_Importer {
 
             if ($existing) {
                 $term_id = $existing->term_id;
-            
-                // Always update name and slug
                 $update_args = array_merge($args, [
                     'name' => $name,
                 ]);
@@ -217,14 +201,16 @@ class Causeway_Importer {
                     update_field('category_attachments', $attachments, 'listings-category_' . $term_id);
                 }
             }
+
+            $imported_ids[] = $causeway_id;
         }
+
+        self::delete_old_terms('listings-category', $imported_ids);
 
         error_log('✅ Categories imported. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
     }
 
     private static function import_amenities() {
-        $url = self::$baseURL . 'amenities';
-
         $response = wp_remote_get(self::$baseURL . 'amenities');
         if (is_wp_error($response)) {
             error_log('❌ Failed to fetch amenities');
@@ -237,6 +223,8 @@ class Causeway_Importer {
             error_log('❌ Invalid amenities data');
             return;
         }
+
+        $imported_ids = [];
 
         foreach ($data as $item) {
             $name = $item['name'] ?? null;
@@ -258,12 +246,7 @@ class Causeway_Importer {
                 $term = wp_insert_term($name, 'listings-amenities', [
                     'slug' => sanitize_title($name),
                 ]);
-
-                if (is_wp_error($term)) {
-                    error_log("Error adding term: $name");
-                    error_log(print_r($term, true));
-                }
-
+                if (is_wp_error($term)) continue;
                 $term_id = $term['term_id'];
             }
 
@@ -277,25 +260,25 @@ class Causeway_Importer {
             if ($type_term) {
                 update_field('listing_type', $type_term->term_id, 'listings-amenities_' . $term_id);
             }
+
+            $imported_ids[] = $causeway_id;
         }
+
+        self::delete_old_terms('listings-amenities', $imported_ids);
 
         error_log('✅ Amenities imported. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
     }
 
     private static function import_campaigns() {
         error_log('Importing campaigns...');
-
-        // $response = wp_remote_get(self::$baseURL.'campaigns', [
-        //     'headers' => [
-        //         'Authorization' => 'Bearer ' . self::get_token(),
-        //     ],
-        // ]);
         $response = wp_remote_get(self::$baseURL.'campaigns');
 
         if (is_wp_error($response)) return;
 
         $data = json_decode(wp_remote_retrieve_body($response), true);
         if (!is_array($data)) return;
+
+        $imported_ids = [];
 
         foreach ($data as $item) {
             $name = $item['name'];
@@ -324,7 +307,11 @@ class Causeway_Importer {
             update_field('causeway_id', $causeway_id, $acf_key);
             update_field('activated_at', $activated_at, $acf_key);
             update_field('expired_at', $expired_at, $acf_key);
+
+            $imported_ids[] = $causeway_id;
         }
+
+        self::delete_old_terms('listing-campaigns', $imported_ids);
 
         error_log('✅ Campaigns imported. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
     }
@@ -367,6 +354,8 @@ class Causeway_Importer {
     private static function import_terms($taxonomy, $items) {
         error_log('Importing '.$taxonomy.'...');
 
+        $imported_ids = [];
+
         foreach ($items as $item) {
             $name = $item['name'];
             $causeway_id = $item['id'];
@@ -385,6 +374,7 @@ class Causeway_Importer {
                 ]);
             }
 
+
             update_field('causeway_id', $causeway_id, $taxonomy . '_' . $term_id);
 
             if (!empty($item['attachments']) && is_array($item['attachments'])) {
@@ -399,7 +389,11 @@ class Causeway_Importer {
                 }
                 update_field('area_attachments', $attachments, $taxonomy . '_' . $term_id);
             }
+
+            $imported_ids[] = (int) $causeway_id;
         }
+
+        self::delete_old_terms($taxonomy, $imported_ids);
 
         error_log('✅ '.$taxonomy.' imported. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
     }
@@ -742,47 +736,6 @@ class Causeway_Importer {
         self::delete_old_listings($imported_ids);
     }
 
-    private static function delete_old_listings($imported_ids) {
-        error_log("Deleting old listings...");
-
-        if (empty($imported_ids)) {
-            error_log("⚠️ No imported IDs provided. Skipping deletion.");
-            return;
-        }
-
-        // Make a fast lookup set
-        $imported_ids_map = array_flip(array_map('intval', $imported_ids));
-        $deleted_count = 0;
-
-        global $wpdb;
-
-        // Query all listings with causeway_id (can be NULL) and their post ID
-        $results = $wpdb->get_results("
-            SELECT p.ID, pm.meta_value as causeway_id
-            FROM {$wpdb->posts} p
-            LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'causeway_id'
-            WHERE p.post_type = 'listing'
-            AND p.post_status != 'trash'
-        ");
-
-        foreach ($results as $row) {
-            $post_id = (int) $row->ID;
-            $causeway_id = isset($row->causeway_id) ? (int) $row->causeway_id : null;
-
-            // Delete if no causeway_id OR causeway_id not in imported_ids
-            if (is_null($causeway_id) || !isset($imported_ids_map[$causeway_id])) {
-                wp_delete_post($post_id, true);
-                $reason = is_null($causeway_id) ? 'no Causeway ID' : "stale Causeway ID: $causeway_id";
-                error_log("🗑️ Deleted listing ID: $post_id ($reason)");
-                $deleted_count++;
-            }
-        }
-        
-        error_log("🗑️ Deleted ".$deleted_count." listings");
-
-        return;
-    }
-
 
     public static function export_listings() {
         error_log("Start Export");
@@ -856,6 +809,63 @@ class Causeway_Importer {
 
         if (!empty($term_ids)) {
             wp_set_object_terms($post_id, $term_ids, $taxonomy);
+        }
+    }
+
+    private static function delete_old_listings($imported_ids) {
+        error_log("Deleting old listings...");
+
+        if (empty($imported_ids)) {
+            error_log("⚠️ No imported IDs provided. Skipping deletion.");
+            return;
+        }
+
+        // Make a fast lookup set
+        $imported_ids_map = array_flip(array_map('intval', $imported_ids));
+        $deleted_count = 0;
+
+        global $wpdb;
+
+        // Query all listings with causeway_id (can be NULL) and their post ID
+        $results = $wpdb->get_results("
+            SELECT p.ID, pm.meta_value as causeway_id
+            FROM {$wpdb->posts} p
+            LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'causeway_id'
+            WHERE p.post_type = 'listing'
+            AND p.post_status != 'trash'
+        ");
+
+        foreach ($results as $row) {
+            $post_id = (int) $row->ID;
+            $causeway_id = isset($row->causeway_id) ? (int) $row->causeway_id : null;
+
+            // Delete if no causeway_id OR causeway_id not in imported_ids
+            if (is_null($causeway_id) || !isset($imported_ids_map[$causeway_id])) {
+                wp_delete_post($post_id, true);
+                $reason = is_null($causeway_id) ? 'no Causeway ID' : "stale Causeway ID: $causeway_id";
+                error_log("🗑️ Deleted listing ID: $post_id ($reason)");
+                $deleted_count++;
+            }
+        }
+        
+        error_log("🗑️ Deleted ".$deleted_count." listings");
+
+        return;
+    }
+
+    private static function delete_old_terms($taxonomy, $imported_ids) {
+        if (empty($imported_ids)) return;
+        $terms = get_terms([
+            'taxonomy' => $taxonomy,
+            'hide_empty' => false,
+        ]);
+
+        foreach ($terms as $term) {
+            $stored_id = get_field('causeway_id', $taxonomy . '_' . $term->term_id);
+            if (!$stored_id || !in_array((int) $stored_id, $imported_ids, true)) {
+                wp_delete_term($term->term_id, $taxonomy);
+                error_log("🗑️ Deleted stale term: {$term->name} (ID: {$term->term_id}) from $taxonomy");
+            }
         }
     }
     
