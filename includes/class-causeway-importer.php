@@ -169,8 +169,11 @@ class Causeway_Importer {
             if ($existing) {
                 $term_id = $existing->term_id;
 
-                // If no parent was set before, we can update
-                if (!isset($existing->parent) || $existing->parent === 0) {
+                 // Update parent if it changed (or needs removal)
+                $current_parent_id = (int) $existing->parent;
+                $new_parent_id = isset($args['parent']) ? (int) $args['parent'] : 0;
+
+                if ($current_parent_id !== $new_parent_id) {
                     wp_update_term($term_id, 'listings-category', $args);
                 }
             } else {
@@ -344,7 +347,7 @@ class Causeway_Importer {
             $name = $item['name'];
             $causeway_id = $item['id'];
 
-            $existing = get_term_by('name', $name, $taxonomy);
+            $existing = self::get_term_by_causeway_id($causeway_id, $taxonomy);
 
             if (!$existing) {
                 $term = wp_insert_term($name, $taxonomy);
