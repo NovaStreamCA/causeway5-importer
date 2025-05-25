@@ -14,7 +14,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-causeway-importer.php';
 require_once plugin_dir_path(__FILE__) . 'admin/class-causeway-admin.php';
 require_once plugin_dir_path(__FILE__) . 'includes/causeway-exporter.php';
 // TODO - enable this
-require_once plugin_dir_path(__FILE__) . 'includes/disable-edit.php';
+// require_once plugin_dir_path(__FILE__) . 'includes/disable-edit.php';
 
 // Overrides acf taxonomy input to return causeway id if selected
 require_once plugin_dir_path(__FILE__) . 'includes/causeway-taxonomy-acf-field.php';
