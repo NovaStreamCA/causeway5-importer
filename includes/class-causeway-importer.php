@@ -90,13 +90,18 @@ class Causeway_Importer {
             $icon = $item['icons'];
             $causeway_id = $item['id'];
 
-            if (!$name) continue;
+            if (!$causeway_id) continue;
 
             // Check if term exists
-            $existing = get_term_by('name', $name, 'listing-type');
+            $existing = self::get_term_by_causeway_id($causeway_id, 'listing-type');
+
 
             if ($existing) {
                 $term_id = $existing->term_id;
+                wp_update_term($term_id, 'listing-type', [
+                    'name' => $name,
+                    'slug' => sanitize_title($name),
+                ]);
                 update_field('icon', $icon, 'listing-type_' . $term_id);
                 update_field('causeway_id', $causeway_id, 'listing-type_' . $term_id);
             } else {
@@ -168,14 +173,21 @@ class Causeway_Importer {
 
             if ($existing) {
                 $term_id = $existing->term_id;
-
-                 // Update parent if it changed (or needs removal)
+            
+                // Always update name and slug
+                $update_args = array_merge($args, [
+                    'name' => $name,
+                ]);
+            
+                // Update parent if different
                 $current_parent_id = (int) $existing->parent;
                 $new_parent_id = isset($args['parent']) ? (int) $args['parent'] : 0;
-
+            
                 if ($current_parent_id !== $new_parent_id) {
-                    wp_update_term($term_id, 'listings-category', $args);
+                    $update_args['parent'] = $new_parent_id;
                 }
+            
+                wp_update_term($term_id, 'listings-category', $update_args);
             } else {
                 $term = wp_insert_term($name, 'listings-category', $args);
                 if (is_wp_error($term)) continue;
@@ -238,6 +250,10 @@ class Causeway_Importer {
 
             if ($existing) {
                 $term_id = $existing->term_id;
+                wp_update_term($term_id, 'listing-amenities', [
+                    'name' => $name,
+                    'slug' => sanitize_title($name),
+                ]);
             } else {
                 $term = wp_insert_term($name, 'listings-amenities', [
                     'slug' => sanitize_title($name),
@@ -287,9 +303,9 @@ class Causeway_Importer {
             $activated_at = $item['activated_at'] ?? null;
             $expired_at = $item['expired_at'] ?? null;
 
-            if (!$name) continue;
+            if (!$causeway_id) continue;
 
-            $existing = get_term_by('name', $name, 'listing-campaigns');
+            $existing = self::get_term_by_causeway_id($causeway_id, 'listing-campaigns');
 
             if (!$existing) {
                 $term = wp_insert_term($name, 'listing-campaigns');
@@ -297,6 +313,10 @@ class Causeway_Importer {
                 $term_id = $term['term_id'];
             } else {
                 $term_id = $existing->term_id;
+                wp_update_term($term_id, 'listing-campaigns', [
+                    'name' => $name,
+                    'slug' => sanitize_title($name),
+                ]);
             }
 
             $acf_key = 'listing-campaigns_' . $term_id;
@@ -313,7 +333,7 @@ class Causeway_Importer {
         error_log('Importing seasons...');
 
         $seasons = [
-            ['id' => 1, 'name' => 'Select Season'],
+            ['id' => 1, 'name' => 'Any Season'],
             ['id' => 2, 'name' => 'Spring'],
             ['id' => 3, 'name' => 'Summer'],
             ['id' => 4, 'name' => 'Fall'],
@@ -324,7 +344,7 @@ class Causeway_Importer {
             $name = $item['name'];
             $causeway_id = $item['id'];
 
-            $existing = get_term_by('name', $name, 'listings-seasons');
+            $existing = self::get_term_by_causeway_id($causeway_id, 'listings-seasons');
 
             if (!$existing) {
                 $term = wp_insert_term($name, 'listings-seasons');
@@ -332,6 +352,10 @@ class Causeway_Importer {
                 $term_id = $term['term_id'];
             } else {
                 $term_id = $existing->term_id;
+                wp_update_term($term_id, 'listings-seasons', [
+                    'name' => $name,
+                    'slug' => sanitize_title($name),
+                ]);
             }
 
             update_field('causeway_id', $causeway_id, 'listings-seasons_' . $term_id);
@@ -355,6 +379,10 @@ class Causeway_Importer {
                 $term_id = $term['term_id'];
             } else {
                 $term_id = $existing->term_id;
+                wp_update_term($term_id, 'listing-campaigns', [
+                    'name' => $name,
+                    'slug' => sanitize_title($name),
+                ]);
             }
 
             update_field('causeway_id', $causeway_id, $taxonomy . '_' . $term_id);
