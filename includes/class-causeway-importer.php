@@ -37,6 +37,7 @@ class Causeway_Importer {
         self::assign_region_communities();
 
         self::assign_area_slugs();
+        self::assign_category_slugs();
 
         self::import_listings();
 
@@ -454,6 +455,203 @@ class Causeway_Importer {
             }
         }
     }
+
+    // This one assigns seperate slugs for category overview pages and listings.php pages.
+    // private static function assign_category_slugs(): void {
+    //     error_log('🏷 Updating category slugs from pages...');
+    
+    //     $root_parent_ids = [239, 179, 260];
+    //     $perPage = 100;
+    //     $page = 1;
+    //     $totalPages = null;
+    //     $allPages = [];
+    
+    //     // Step 1: Fetch all pages
+    //     do {
+    //         $url = add_query_arg([
+    //             '_fields'      => 'id,slug,template,parent',
+    //             'per_page'     => $perPage,
+    //             'page'         => $page,
+    //             'bypass_clean' => 1,
+    //         ], rest_url('wp/v2/pages'));
+    
+    //         $response = wp_remote_get($url);
+    //         if (is_wp_error($response)) {
+    //             error_log('❌ WP Error: ' . $response->get_error_message());
+    //             break;
+    //         }
+    
+    //         $headers = wp_remote_retrieve_headers($response);
+    //         if ($totalPages === null) {
+    //             $totalPages = (int) $headers['x-wp-totalpages'] ?? 0;
+    //             if ($totalPages === 0) break;
+    //         }
+    
+    //         $data = json_decode(wp_remote_retrieve_body($response), true);
+    //         if (!is_array($data) || empty($data)) break;
+    
+    //         $allPages = array_merge($allPages, $data);
+    //         $page++;
+    //     } while ($page <= $totalPages);
+    
+    //     error_log('All Pages: ' . count($allPages) . print_r($allPages, true));
+    
+    //     // Step 2: Filter pages using listings.php or listings-landing.php
+    //     $categoryPages = array_filter($allPages, function ($page) {
+    //         return $page['template'] === 'listings.php' || $page['template'] === 'listings-landing.php';
+    //     });
+    
+    //     error_log('Found category pages: ' . count($categoryPages));
+    
+    //     // Step 3: Build slug maps
+    //     $slugMap = [];
+    //     $overviewSlugMap = [];
+    
+    //     foreach ($categoryPages as $page) {
+    //         $template = $page['template'];
+    //         $page_id = $page['id'];
+    //         $permalink = get_permalink($page_id);
+    
+    //         if ($template === 'listings.php') {
+    //             $categoryId = get_field('category_filter', $page_id);
+    //             if ($categoryId) {
+    //                 $slugMap[(int)$categoryId] = $permalink;
+    //             }
+    //         }
+    
+    //         if ($template === 'listings-landing.php') {
+    //             $overviewId = get_field('category', $page_id);
+    //             if ($overviewId) {
+    //                 $overviewSlugMap[(int)$overviewId] = $permalink;
+    //             }
+    //         }
+    //     }
+    
+    //     error_log('Slug Map: ' . print_r($slugMap, true));
+    //     error_log('Overview Slug Map: ' . print_r($overviewSlugMap, true));
+    
+    //     // Step 4: Update ACF fields for each term
+    //     $terms = get_terms([
+    //         'taxonomy' => 'listings-category',
+    //         'hide_empty' => false,
+    //     ]);
+    
+    //     foreach ($terms as $term) {
+    //         $causeway_id = get_field('causeway_id', 'listings-category_' . $term->term_id);
+    //         if (!$causeway_id) continue;
+    
+    //         $term_key = 'listings-category_' . $term->term_id;
+    
+    //         if (isset($slugMap[(int) $causeway_id])) {
+    //             update_field('category_slug', $slugMap[(int) $causeway_id], $term_key);
+    //         }
+    
+    //         if (isset($overviewSlugMap[(int) $causeway_id])) {
+    //             update_field('category_overview_slug', $overviewSlugMap[(int) $causeway_id], $term_key);
+    //         }
+    //     }
+    
+    //     error_log('🏁 Category slugs assignment complete.');
+    // }
+
+    // This one assigns a single slug for category overview pages and listings.php pages.
+    private static function assign_category_slugs(): void {
+        error_log('🏷 Updating category slugs from pages...');
+    
+        $root_parent_ids = [239, 179, 260];
+        $perPage = 100;
+        $page = 1;
+        $totalPages = null;
+        $allPages = [];
+    
+        // Step 1: Fetch all pages
+        do {
+            $url = add_query_arg([
+                '_fields'      => 'id,slug,template,parent',
+                'per_page'     => $perPage,
+                'page'         => $page,
+                'bypass_clean' => 1,
+            ], rest_url('wp/v2/pages'));
+    
+            $response = wp_remote_get($url);
+            if (is_wp_error($response)) {
+                error_log('❌ WP Error: ' . $response->get_error_message());
+                break;
+            }
+    
+            $headers = wp_remote_retrieve_headers($response);
+            if ($totalPages === null) {
+                $totalPages = (int) $headers['x-wp-totalpages'] ?? 0;
+                if ($totalPages === 0) break;
+            }
+    
+            $data = json_decode(wp_remote_retrieve_body($response), true);
+            if (!is_array($data) || empty($data)) break;
+    
+            $allPages = array_merge($allPages, $data);
+            $page++;
+        } while ($page <= $totalPages);
+    
+        error_log('All Pages: ' . count($allPages) . print_r($allPages, true));
+    
+        // Step 2: Filter relevant category pages
+        $categoryPages = array_filter($allPages, function ($page) {
+            return $page['template'] === 'listings.php' || $page['template'] === 'listings-landing.php';
+        });
+    
+        error_log('Found category pages: ' . count($categoryPages));
+    
+        // Step 3: Build slug map with listings-landing.php taking precedence
+        $slugMap = [];
+    
+        foreach ($categoryPages as $page) {
+            $template = $page['template'];
+            $page_id = $page['id'];
+            $permalink = get_permalink($page_id);
+    
+            if ($template === 'listings.php') {
+                $categoryId = get_field('category_filter', $page_id);
+                if ($categoryId && !isset($slugMap[(int)$categoryId])) {
+                    $slugMap[(int)$categoryId] = $permalink;
+                }
+            }
+    
+            if ($template === 'listings-landing.php') {
+                $overviewId = get_field('category', $page_id);
+                if ($overviewId) {
+                    // Override any existing entry from listings.php
+                    $slugMap[(int)$overviewId] = $permalink;
+                }
+            }
+        }
+    
+        error_log('Final Slug Map: ' . print_r($slugMap, true));
+    
+        // Step 4: Update ACF field 'category_slug' and clear 'category_overview_slug'
+        $terms = get_terms([
+            'taxonomy' => 'listings-category',
+            'hide_empty' => false,
+        ]);
+    
+        foreach ($terms as $term) {
+            $causeway_id = get_field('causeway_id', 'listings-category_' . $term->term_id);
+            if (!$causeway_id) continue;
+    
+            $term_key = 'listings-category_' . $term->term_id;
+    
+            // Set primary slug
+            if (isset($slugMap[(int)$causeway_id])) {
+                update_field('category_slug', $slugMap[(int)$causeway_id], $term_key);
+            }
+    
+            // Always clear deprecated field
+            update_field('category_overview_slug', null, $term_key); // Or '' if preferred
+        }
+    
+        error_log('🏁 Category slugs assignment complete.');
+    }
+    
+    
 
     private static function assign_community_areas_and_regions() {
         foreach (self::$communities as $community) {

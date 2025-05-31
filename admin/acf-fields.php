@@ -68,7 +68,6 @@ function causeway_register_acf_fields() {
                     'name' => 'causeway_id',
                     'type' => 'number',
                 ],
-                
                 [
                     'key' => 'field_category_attachments',
                     'label' => 'Attachments',
@@ -80,6 +79,8 @@ function causeway_register_acf_fields() {
                         ['key' => 'field_attachment_alt', 'label' => 'Alt Text', 'name' => 'alt', 'type' => 'text'],
                     ],
                 ],
+                ['key' => 'field_category_slug', 'label' => 'Category Slug', 'name' => 'category_slug', 'type' => 'text'],
+                // ['key' => 'field_category_overview_slug', 'label' => 'Category Overview Slug', 'name' => 'category_overview_slug', 'type' => 'text'],
             ],
             'location' => [
                 [

@@ -276,6 +276,8 @@ function get_taxonomy_terms_with_acf($request) {
         $term_id_to_causeway_id[$term_id] = $causeway_id;
         $attachments = [];
         $area_slug = null;
+        $category_slug = null;
+        // $category_overview_slug = null;
 
         if (!empty($acf['area_attachments']) && is_array($acf['area_attachments'])) {
             $attachments = $acf['area_attachments'];
@@ -286,6 +288,14 @@ function get_taxonomy_terms_with_acf($request) {
         if (!empty($acf['area_slug'])) {
             $area_slug = $acf['area_slug'];
         }
+
+        if (!empty($acf['category_slug'])) {
+            $category_slug = $acf['category_slug'];
+        }
+
+        // if (!empty($acf['category_overview_slug'])) {
+        //     $category_overview_slug = $acf['category_overview_slug'];
+        // }
 
         $relationships = format_related_acf_ids([
             'related_communities' => 'listing-communities',
@@ -315,6 +325,11 @@ function get_taxonomy_terms_with_acf($request) {
 
         if($taxonomy === 'listing-areas') {
             $term_data['area_slug'] = $area_slug;
+        }
+
+        if($taxonomy === 'listings-category') {
+            $term_data['category_slug'] = $category_slug;
+            // $term_data['category_overview_slug'] = $category_overview_slug;
         }
 
         foreach ($relationships as $key => $val) {
