@@ -171,6 +171,8 @@ class Causeway_Importer {
             // Save ACF fields
             if (isset($term_id)) {
                 update_field('causeway_id', $causeway_id, 'listings-category_' . $term_id);
+                update_field('category_icon_light', $item['icon_light'], 'listings-category_' . $term_id);
+                update_field('category_icon_dark', $item['icon_dark'], 'listings-category_' . $term_id);
 
                 $type_term = self::get_term_by_causeway_id($type_id, 'listing-type');
                 if ($type_term) {
@@ -802,6 +804,7 @@ class Causeway_Importer {
             self::assign_listing_terms($post_id, $item['campaigns'], 'listing-campaigns');
 
             // Assign Seasons
+            wp_set_object_terms($post_id, [], 'listings-seasons');
             $season_ids = [];
             foreach ($item['seasons'] ?? [] as $season) {
                 $term = get_term_by('name', $season, 'listings-seasons');
@@ -809,8 +812,14 @@ class Causeway_Importer {
             }
             wp_set_object_terms($post_id, $season_ids, 'listings-seasons');
 
+            // Remove old terms before addingn new ones
+            wp_set_object_terms($post_id, [], 'listing-communities');
+            wp_set_object_terms($post_id, [], 'listing-regions');
+            wp_set_object_terms($post_id, [], 'listing-areas');
+
             // Assign Locations (coordinates and details)
             foreach ($item['locations'] ?? [] as $location) {
+
                 update_field('location_details', [
                     'latitude'           => isset($location['latitude']) ? (float)$location['latitude'] : null,
                     'longitude'           => isset($location['longitude']) ? (float)$location['longitude'] : null,

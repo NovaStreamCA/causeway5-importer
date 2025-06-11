@@ -53,9 +53,11 @@
     <custom-field action="copy">location_details</custom-field>
     <custom-field action="copy">dates</custom-field>
     <custom-field action="copy">listing_type</custom-field>
+    <custom-field action="copy">opengraph_title</custom-field>
+    <custom-field action="copy">category_icon_light</custom-field>
+    <custom-field action="copy">category_icon_dark</custom-field>
 
     <!-- Translate fields -->
-    <custom-field action="translate">opengraph_title</custom-field>
     <custom-field action="translate">opengraph_description</custom-field>
     <custom-field action="translate">highlights</custom-field>
     <custom-field action="translate">related_listings</custom-field>

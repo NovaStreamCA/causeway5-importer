@@ -80,6 +80,8 @@ function causeway_register_acf_fields() {
                     ],
                 ],
                 ['key' => 'field_category_slug', 'label' => 'Category Slug', 'name' => 'category_slug', 'type' => 'text'],
+                ['key' => 'field_category_icon_light', 'label' => 'Category Icon Light', 'name' => 'category_icon_light', 'type' => 'text'],
+                ['key' => 'field_category_icon_dark', 'label' => 'Category Icon Dark', 'name' => 'category_icon_dark', 'type' => 'text'],
                 // ['key' => 'field_category_overview_slug', 'label' => 'Category Overview Slug', 'name' => 'category_overview_slug', 'type' => 'text'],
             ],
             'location' => [

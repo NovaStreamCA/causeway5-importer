@@ -58,6 +58,8 @@ function get_listings($request) {
             'phone_secondary'=> $acf['phone_secondary'] ?? null,
             'phone_offseason'=> $acf['phone_offseason'] ?? null,
             'phone_tollfree' => $acf['phone_tollfree'] ?? null,
+            'opengraph_title' => $acf['opengraph_title'] ?? null,
+            'opengraph_description' => $acf['opengraph_description'] ?? null,
             'email'          => $acf['email'] ?? null,
             'meta'          => $acf['metaline'] ?? null,
             'status'         => $acf['status'] ?? 'Draft',
@@ -277,6 +279,8 @@ function get_taxonomy_terms_with_acf($request) {
         $attachments = [];
         $area_slug = null;
         $category_slug = null;
+        $icon_light = null;
+        $icon_dark = null;
         // $category_overview_slug = null;
 
         if (!empty($acf['area_attachments']) && is_array($acf['area_attachments'])) {
@@ -291,6 +295,14 @@ function get_taxonomy_terms_with_acf($request) {
 
         if (!empty($acf['category_slug'])) {
             $category_slug = $acf['category_slug'];
+        }
+
+        if (!empty($acf['icon_light'])) {
+            $icon_light = $acf['icon_light'];
+        }
+
+        if (!empty($acf['icon_dark'])) {
+            $icon_dark = $acf['icon_dark'];
         }
 
         // if (!empty($acf['category_overview_slug'])) {
@@ -329,6 +341,8 @@ function get_taxonomy_terms_with_acf($request) {
 
         if($taxonomy === 'listings-category') {
             $term_data['category_slug'] = $category_slug;
+            $term_data['icon_light'] = $icon_light;
+            $term_data['icon_dark'] = $icon_dark;
             // $term_data['category_overview_slug'] = $category_overview_slug;
         }
 

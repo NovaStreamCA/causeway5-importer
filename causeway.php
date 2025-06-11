@@ -18,6 +18,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/causeway-exporter.php';
 
 // Overrides acf taxonomy input to return causeway id if selected
 require_once plugin_dir_path(__FILE__) . 'includes/causeway-taxonomy-acf-field.php';
+require_once plugin_dir_path(__FILE__) . 'includes/causeway-postobject-acf-field.php';
 
 add_action('admin_init', function () {
     Causeway_Admin::init();
