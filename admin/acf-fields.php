@@ -119,6 +119,7 @@ function causeway_register_acf_fields() {
                     'return_format' => 'id',
                     'allow_null' => 1,
                 ],
+                ['key' => 'field_amenity_icon', 'label' => 'Amenity Icon', 'name' => 'amenity_icon', 'type' => 'text'],
             ],
             'location' => [
                 [

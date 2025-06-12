@@ -239,6 +239,7 @@ class Causeway_Importer {
 
             // Update ACF fields
             update_field('causeway_id', $causeway_id, 'listings-amenities_' . $term_id);
+            update_field('amenity_icon', $item['icon'], 'listings-amenities_' . $term_id);
 
             // Set ACF relationship to type
             $type_term = self::get_term_by_causeway_id($type_id, 'listing-type');

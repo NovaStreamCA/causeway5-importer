@@ -56,6 +56,7 @@
     <custom-field action="copy">opengraph_title</custom-field>
     <custom-field action="copy">category_icon_light</custom-field>
     <custom-field action="copy">category_icon_dark</custom-field>
+    <custom-field action="copy">amenity_icon</custom-field>
 
     <!-- Translate fields -->
     <custom-field action="translate">opengraph_description</custom-field>

@@ -281,6 +281,7 @@ function get_taxonomy_terms_with_acf($request) {
         $category_slug = null;
         $icon_light = null;
         $icon_dark = null;
+        $amenity_icon = null;
         // $category_overview_slug = null;
 
         if (!empty($acf['area_attachments']) && is_array($acf['area_attachments'])) {
@@ -303,6 +304,10 @@ function get_taxonomy_terms_with_acf($request) {
 
         if (!empty($acf['icon_dark'])) {
             $icon_dark = $acf['icon_dark'];
+        }
+
+        if (!empty($acf['icon'])) {
+            $amenity_icon = $acf['icon'];
         }
 
         // if (!empty($acf['category_overview_slug'])) {
@@ -344,6 +349,10 @@ function get_taxonomy_terms_with_acf($request) {
             $term_data['icon_light'] = $icon_light;
             $term_data['icon_dark'] = $icon_dark;
             // $term_data['category_overview_slug'] = $category_overview_slug;
+        }
+
+        if($taxonomy === 'listings-amenities') {
+            $term_data['icon'] = $amenity_icon;
         }
 
         foreach ($relationships as $key => $val) {
