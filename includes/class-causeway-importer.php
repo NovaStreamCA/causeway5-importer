@@ -223,7 +223,7 @@ class Causeway_Importer {
 
             if ($existing) {
                 $term_id = $existing->term_id;
-                wp_update_term($term_id, 'listing-amenities', [
+                wp_update_term($term_id, 'listings-amenities', [
                     'name' => $name,
                     'slug' => sanitize_title($name),
                 ]);
