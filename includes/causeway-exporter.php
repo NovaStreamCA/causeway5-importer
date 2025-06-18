@@ -109,6 +109,15 @@ function get_listings($request) {
                 $translated_description = html_entity_decode(apply_filters('the_content', $translated_post->post_content));
 
                 if($translated_acf || $translated_description) {
+
+                    if ( ! empty( $translated_acf['attachments'] ) ) {
+                        add_alt_translations_to_attachments(
+                            $listing['attachments'],                 // ← passes by reference
+                            $translated_acf['attachments'],
+                            $lang_code
+                        );
+                    }
+
                     $listing['translations'][$lang_code] = [
                         // 'name'        => $translated_title,
                         'description' => $translated_description,
@@ -610,4 +619,40 @@ function format_dates($dates): array {
     }
 
     return $result;
+}
+
+/**
+ * Inject "translations" → "<lang>" → "alt" into each attachment row.
+ *
+ * @param array &$base     Base-language attachments already produced by format_attachments()
+ * @param array $srcRows   Attachments repeater ACF from the translated post
+ * @param string $lang     Language code, e.g. 'fr'
+ */
+function add_alt_translations_to_attachments( array &$base, array $srcRows, string $lang ): void {
+    foreach ( $base as $idx => &$att ) {
+
+        // Ensure the translations container exists
+        if ( ! isset( $att['translations'] ) ) {
+            $att['translations'] = [];
+        }
+
+        /* ── Priority 1 : same-row repeater field ─────────────────── */
+        if ( ! empty( $srcRows[ $idx ]['alt'] ) ) {
+            $att['translations'][ $lang ] = [
+                'alt' => html_entity_decode( $srcRows[ $idx ]['alt'] ),
+            ];
+            continue;
+        }
+
+        /* ── Priority 2 : WPML media translation (fallback) ───────── */
+        if ( ! empty( $att['id'] ) ) {
+            $translated_media_id = apply_filters( 'wpml_object_id', $att['id'], 'attachment', true, $lang );
+            if ( $translated_media_id && $translated_media_id !== $att['id'] ) {
+                $alt = get_post_meta( $translated_media_id, '_wp_attachment_image_alt', true );
+                if ( $alt ) {
+                    $att['translations'][ $lang ] = [ 'alt' => html_entity_decode( $alt ) ];
+                }
+            }
+        }
+    }
 }
