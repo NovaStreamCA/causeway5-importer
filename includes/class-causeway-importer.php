@@ -10,6 +10,12 @@ class Causeway_Importer {
 
     public static function import() {
         error_log('start import');
+
+        /* ── FORCE ENGLISH ───────────────────────── */
+        $orig_lang = apply_filters( 'wpml_current_language', null );
+        do_action( 'wpml_switch_language', 'en' );        // or your real default, e.g. 'en_CA'
+        /* ────────────────────────────────────────── */
+
         define('CAUSEWAY_IMPORTING', true);
         self::$start = microtime(true);
 
@@ -595,7 +601,7 @@ class Causeway_Importer {
             $page++;
         } while ($page <= $totalPages);
     
-        error_log('All Pages: ' . count($allPages) . print_r($allPages, true));
+        // error_log('All Pages: ' . count($allPages) . print_r($allPages, true));
     
         // Step 2: Filter relevant category pages
         $categoryPages = array_filter($allPages, function ($page) {
@@ -628,7 +634,7 @@ class Causeway_Importer {
             }
         }
     
-        error_log('Final Slug Map: ' . print_r($slugMap, true));
+        // error_log('Final Slug Map: ' . print_r($slugMap, true));
     
         // Step 4: Update ACF field 'category_slug' and clear 'category_overview_slug'
         $terms = get_terms([
@@ -696,11 +702,6 @@ class Causeway_Importer {
     private static function import_listings() {
         error_log('Importing listings..');
         $imported_ids = [];
-        
-        // $response = wp_remote_get(self::$baseURL.'listings?search=listings.status&compare==&value=Published', [
-        //     'headers' => ['Authorization' => 'Bearer ' . self::get_token()],
-        //     'timeout' => 1200,
-        // ]);
 
         $response = wp_remote_get(self::$baseURL.'listings?search=listings.status&compare==&value=Published', [
             'timeout' => 1200,
@@ -726,6 +727,8 @@ class Causeway_Importer {
             $post_title = $item['name'] ?? '';
             $slug = $item['slug'] ?? '';
             $description = $item['description'] ?? '';
+            // error_log("Processing listing: " . $post_title . " (ID: " . ($item['id'] ?? 'N/A') . ")");
+            // error_log("Description " . $description);
             $causeway_id = $item['id'] ?? null;
             $post_status = strtolower($item['status'] ?? '') === 'published' ? 'publish' : 'draft';
             $post_id = false;
