@@ -1,4 +1,5 @@
 <?php
+
 // File: causeway.php
 /**
  * Plugin Name: Causeway Listings Importer
@@ -7,7 +8,9 @@
  * Author: NovaStream
  */
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 require_once plugin_dir_path(__FILE__) . 'admin/acf-fields.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-causeway-importer.php';
@@ -24,7 +27,8 @@ add_action('admin_init', function () {
     Causeway_Admin::init();
 });
 
-function causeway_register_listing_post_type() {
+function causeway_register_listing_post_type()
+{
     register_post_type('listing', [
         'labels' => [
             'name' => __('Causeway'),
@@ -51,7 +55,8 @@ function causeway_register_listing_post_type() {
 }
 add_action('init', 'causeway_register_listing_post_type');
 
-function causeway_register_taxonomies() {
+function causeway_register_taxonomies()
+{
     $taxonomies = [
         'listing-type' => ['singular' => 'Type', 'plural' => 'Types'],
         'listing-campaigns' => ['singular' => 'Campaign', 'plural' => 'Campaigns'],
@@ -114,12 +119,18 @@ register_activation_hook(__FILE__, function () {
     if (!wp_next_scheduled('causeway_cron_hook')) {
         wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
     }
+    if (!wp_next_scheduled('causeway_clear_cron_hook')) {
+        wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
+    }
 });
 
 // Safety fallback in case plugin was already active
 add_action('init', function () {
     if (!wp_next_scheduled('causeway_cron_hook')) {
         wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
+    }
+    if (!wp_next_scheduled('causeway_clear_cron_hook')) {
+        wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
     }
 });
 
@@ -132,21 +143,28 @@ register_deactivation_hook(__FILE__, function () {
 });
 
 add_action('causeway_cron_hook', 'run_causeway_export');
+add_action('causeway_clear_cron_hook', 'clear_causeway_status');
 
-function run_causeway_export() {
+function run_causeway_export()
+{
     error_log('🕑 Running Causeway export via cron @ ' . date('Y-m-d H:i:s'));
     if (class_exists('Causeway_Importer')) {
         Causeway_Importer::import();
     }
 }
 
-if ( defined( 'WP_CLI' ) && WP_CLI ) {
+function clear_causeway_status()
+{
+    update_option('importing_causeway', '0');
+}
+
+if (defined('WP_CLI') && WP_CLI) {
 
     /**
      * Manage Causeway imports.
      */
-    class Causeway_CLI_Command {
-
+    class Causeway_CLI_Command
+    {
         /**
          * Run the full import.
          *
@@ -156,19 +174,20 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
          *
          * @when after_wp_load
          */
-        public function import() {
-            $start = microtime( true );
+        public function import()
+        {
+            $start = microtime(true);
 
             // Lift PHP limits if you like:
-            ini_set( 'memory_limit', '1G' );
-            set_time_limit( 0 );
+            ini_set('memory_limit', '1G');
+            set_time_limit(0);
 
             Causeway_Importer::import();
 
-            $secs = number_format( microtime( true ) - $start, 2 );
-            WP_CLI::success( "Import finished in {$secs}s" );
+            $secs = number_format(microtime(true) - $start, 2);
+            WP_CLI::success("Import finished in {$secs}s");
         }
     }
 
-    WP_CLI::add_command( 'causeway', 'Causeway_CLI_Command' );
+    WP_CLI::add_command('causeway', 'Causeway_CLI_Command');
 }

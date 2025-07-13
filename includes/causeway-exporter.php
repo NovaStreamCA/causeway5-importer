@@ -26,7 +26,8 @@ add_action('init', function () {
 Start Listings
 */
 
-function get_listings($request) {
+function get_listings($request)
+{
     $id        = $request->get_param('id');
     $per_page  = $request->get_param('per_page') ?: -1;
     $page      = $request->get_param('page') ?: 1;
@@ -36,9 +37,16 @@ function get_listings($request) {
         'post_status'    => 'publish',
         'posts_per_page' => $per_page,
         'paged'          => $page,
+        'meta_key'       => 'is_featured',
+        'orderby'        => [
+            'meta_value_num' => 'DESC',  // Featured (1) comes before non-featured (0)
+            'title'          => 'ASC',   // Then order A–Z by title
+        ],
     ];
 
-    if ($id) $args['p'] = intval($id);
+    if ($id) {
+        $args['p'] = intval($id);
+    }
 
     $query = new WP_Query($args);
     $results = [];
@@ -55,8 +63,8 @@ function get_listings($request) {
             'highlights'     => html_entity_decode($acf['highlights']) ?? null,
             'contact_name'   => $acf['contact_name'] ?? null,
             'phone_primary'  => $acf['phone_primary'] ?? null,
-            'phone_secondary'=> $acf['phone_secondary'] ?? null,
-            'phone_offseason'=> $acf['phone_offseason'] ?? null,
+            'phone_secondary' => $acf['phone_secondary'] ?? null,
+            'phone_offseason' => $acf['phone_offseason'] ?? null,
             'phone_tollfree' => $acf['phone_tollfree'] ?? null,
             'opengraph_title' => $acf['opengraph_title'] ?? null,
             'opengraph_description' => $acf['opengraph_description'] ?? null,
@@ -99,18 +107,21 @@ function get_listings($request) {
             foreach ($languages as $lang_code => $lang_info) {
                 $translated_post_id = apply_filters('wpml_object_id', $id, 'listing', true, $lang_code);
 
-                if (!$translated_post_id || $translated_post_id === $id) continue;
+                if (!$translated_post_id || $translated_post_id === $id) {
+                    continue;
+                }
 
                 $translated_post = get_post($translated_post_id);
-                if (!$translated_post || $translated_post->post_status !== 'publish') continue;
+                if (!$translated_post || $translated_post->post_status !== 'publish') {
+                    continue;
+                }
 
                 $translated_acf = get_fields($translated_post_id);
                 // $translated_title = html_entity_decode(get_the_title($translated_post));
                 $translated_description = html_entity_decode(apply_filters('the_content', $translated_post->post_content));
 
-                if($translated_acf || $translated_description) {
-
-                    if ( ! empty( $translated_acf['attachments'] ) ) {
+                if ($translated_acf || $translated_description) {
+                    if (! empty($translated_acf['attachments'])) {
                         add_alt_translations_to_attachments(
                             $listing['attachments'],                 // ← passes by reference
                             $translated_acf['attachments'],
@@ -123,12 +134,12 @@ function get_listings($request) {
                         'description' => $translated_description,
                     ];
 
-                    if($translated_acf) {
-                        if((array_key_exists('highlights', $translated_acf)) ) {
+                    if ($translated_acf) {
+                        if ((array_key_exists('highlights', $translated_acf))) {
                             $listing['translations'][$lang_code]['highlights'] = html_entity_decode($translated_acf['highlights']);
                         }
 
-                        if((array_key_exists('metaline', $translated_acf))) {
+                        if ((array_key_exists('metaline', $translated_acf))) {
                             $listing['translations'][$lang_code]['meta'] = html_entity_decode($translated_acf['metaline']);
                         }
                     }
@@ -163,12 +174,13 @@ function get_listings($request) {
  *     'translations' => [ <lang> => [ id, name, slug, … ] ]
  * ]
  */
-function get_terms_with_acf( int $post_id, string $taxonomy, $include_parents = false ): array {
-    $terms  = wp_get_post_terms( $post_id, $taxonomy );
+function get_terms_with_acf(int $post_id, string $taxonomy, $include_parents = false): array
+{
+    $terms  = wp_get_post_terms($post_id, $taxonomy);
     $result = [];
 
-    foreach ( $terms as $term ) {
-        $result[] = build_term_tree( (int) $term->term_id, $taxonomy, $include_parents );
+    foreach ($terms as $term) {
+        $result[] = build_term_tree((int) $term->term_id, $taxonomy, $include_parents);
     }
 
     return $result;
@@ -183,22 +195,23 @@ function get_terms_with_acf( int $post_id, string $taxonomy, $include_parents = 
  * @param  int[]    $seen      Internally prevents circular loops.
  * @return array|null          Null if the term can’t be loaded.
  */
-function build_term_tree( int $term_id, string $taxonomy, $include_parents, array &$seen = []): ?array {
+function build_term_tree(int $term_id, string $taxonomy, $include_parents, array &$seen = []): ?array
+{
 
     /* ── guard: avoid infinite loops ───────────────────────────────────────── */
-    if ( in_array( $term_id, $seen, true ) ) {
+    if (in_array($term_id, $seen, true)) {
         return null;
     }
     $seen[] = $term_id;
 
     /* ── fetch term ───────────────────────────────────────────────────────── */
-    $term = get_term( $term_id, $taxonomy );
-    if ( ! $term || is_wp_error( $term ) ) {
+    $term = get_term($term_id, $taxonomy);
+    if (! $term || is_wp_error($term)) {
         return null;
     }
 
     /* ── base + ACF ───────────────────────────────────────────────────────── */
-    $acf         = get_fields( "{$taxonomy}_{$term_id}" ) ?: [];
+    $acf         = get_fields("{$taxonomy}_{$term_id}") ?: [];
     $causeway_id = $acf['causeway_id'] ?? $term_id;
 
     // Extract + remove relationship fields you don’t want duplicated
@@ -221,30 +234,30 @@ function build_term_tree( int $term_id, string $taxonomy, $include_parents, arra
 
     $node = [
         'id'   => (int) $causeway_id,
-        'name' => html_entity_decode( $term->name ),
+        'name' => html_entity_decode($term->name),
         'slug' => $term->slug,
     ] + $relationship_fields + $acf;
 
     /* ── translations ─────────────────────────────────────────────────────── */
-    if ( function_exists( 'icl_object_id' ) ) {
-        $langs = apply_filters( 'wpml_active_languages', null, [ 'skip_missing' => 0 ] );
-        if ( $langs ) {
-            foreach ( $langs as $code => $info ) {
-                $t_id = apply_filters( 'wpml_object_id', $term_id, $taxonomy, true, $code );
-                if ( ! $t_id || $t_id === $term_id ) {
+    if (function_exists('icl_object_id')) {
+        $langs = apply_filters('wpml_active_languages', null, [ 'skip_missing' => 0 ]);
+        if ($langs) {
+            foreach ($langs as $code => $info) {
+                $t_id = apply_filters('wpml_object_id', $term_id, $taxonomy, true, $code);
+                if (! $t_id || $t_id === $term_id) {
                     continue;
                 }
-                $t_term = get_term( $t_id, $taxonomy );
-                if ( ! $t_term || is_wp_error( $t_term ) ) {
+                $t_term = get_term($t_id, $taxonomy);
+                if (! $t_term || is_wp_error($t_term)) {
                     continue;
                 }
-                $t_acf      = get_fields( "{$taxonomy}_{$t_id}" ) ?: [];
+                $t_acf      = get_fields("{$taxonomy}_{$t_id}") ?: [];
                 $t_causeway = $t_acf['causeway_id'] ?? $t_id;
 
                 $node['translations'][ $code ] = array_merge(
                     [
                         'id'   => (int) $t_causeway,
-                        'name' => html_entity_decode( $t_term->name ),
+                        'name' => html_entity_decode($t_term->name),
                         'slug' => $t_term->slug,
                     ],
                     $t_acf ?: []
@@ -254,17 +267,18 @@ function build_term_tree( int $term_id, string $taxonomy, $include_parents, arra
     }
 
     /* ── recurse into the parent ──────────────────────────────────────────── */
-    if($include_parents) {
-        $node['parent_object'] = $term->parent ? build_term_tree( (int) $term->parent, $taxonomy, $include_parents, $seen ) : null;
+    if ($include_parents) {
+        $node['parent_object'] = $term->parent ? build_term_tree((int) $term->parent, $taxonomy, $include_parents, $seen) : null;
     }
-    
+
     return $node;
 }
 
 
 
 
-function get_taxonomy_terms_with_acf($request) {
+function get_taxonomy_terms_with_acf($request)
+{
     $taxonomy = $request->get_param('taxonomy');
 
     if (!taxonomy_exists($taxonomy)) {
@@ -279,9 +293,11 @@ function get_taxonomy_terms_with_acf($request) {
     $indexed = [];
     $term_id_to_causeway_id = [];
 
+
     foreach ($terms as $term) {
         $term_id = $term->term_id;
         $acf = get_fields($taxonomy . '_' . $term_id) ?: [];
+
 
         $causeway_id = isset($acf['causeway_id']) ? (int)$acf['causeway_id'] : $term_id;
         $term_id_to_causeway_id[$term_id] = $causeway_id;
@@ -292,6 +308,8 @@ function get_taxonomy_terms_with_acf($request) {
         $icon_dark = null;
         $amenity_icon = null;
         // $category_overview_slug = null;
+
+        #print_r($acf['area_attachments']);
 
         if (!empty($acf['area_attachments']) && is_array($acf['area_attachments'])) {
             $attachments = $acf['area_attachments'];
@@ -336,6 +354,7 @@ function get_taxonomy_terms_with_acf($request) {
             $acf['related_areas'],
             $acf['related_regions'],
             $acf['listing_type'],
+            $acf['attachments'],
             $acf['area_attachments'],
             $acf['category_attachments'],
             $acf['area_slug']
@@ -349,18 +368,18 @@ function get_taxonomy_terms_with_acf($request) {
             'attachments' => $attachments
         ];
 
-        if($taxonomy === 'listing-areas') {
+        if ($taxonomy === 'listing-areas') {
             $term_data['area_slug'] = $area_slug;
         }
 
-        if($taxonomy === 'listings-category') {
+        if ($taxonomy === 'listings-category') {
             $term_data['category_slug'] = $category_slug;
             $term_data['icon_light'] = $icon_light;
             $term_data['icon_dark'] = $icon_dark;
             // $term_data['category_overview_slug'] = $category_overview_slug;
         }
 
-        if($taxonomy === 'listings-amenities') {
+        if ($taxonomy === 'listings-amenities') {
             $term_data['icon'] = $amenity_icon;
         }
 
@@ -382,10 +401,14 @@ function get_taxonomy_terms_with_acf($request) {
                 foreach ($languages as $lang_code => $lang_info) {
                     $translated_term_id = apply_filters('wpml_object_id', $term_id, $taxonomy, true, $lang_code);
 
-                    if (!$translated_term_id || $translated_term_id === $term_id) continue;
+                    if (!$translated_term_id || $translated_term_id === $term_id) {
+                        continue;
+                    }
 
                     $translated_term = get_term($translated_term_id, $taxonomy);
-                    if (!$translated_term || is_wp_error($translated_term)) continue;
+                    if (!$translated_term || is_wp_error($translated_term)) {
+                        continue;
+                    }
 
                     $term_data['translations'][$lang_code] = [
                         'name' => html_entity_decode($translated_term->name),
@@ -412,23 +435,26 @@ function get_taxonomy_terms_with_acf($request) {
 }
 
 
-function format_related_acf_ids(array $fieldMap, $acf): array {
+function format_related_acf_ids(array $fieldMap, $acf): array
+{
     $output = [];
 
-    if(!is_array($acf)) {
+    if (!is_array($acf)) {
         return $output;
     }
 
     foreach ($fieldMap as $acfKey => $taxonomy) {
-        if (!isset($acf[$acfKey])) continue;
+        if (!isset($acf[$acfKey])) {
+            continue;
+        }
 
         if ($acfKey === 'listing_type') {
             $outputKey = 'type';
-        } else if ($acfKey === 'related_communities') {
+        } elseif ($acfKey === 'related_communities') {
             $outputKey = 'communities';
-        } else if ($acfKey === 'related_areas') {
+        } elseif ($acfKey === 'related_areas') {
             $outputKey = 'areas';
-        } else if ($acfKey === 'related_regions') {
+        } elseif ($acfKey === 'related_regions') {
             $outputKey = 'regions';
         } else {
             continue;
@@ -436,7 +462,9 @@ function format_related_acf_ids(array $fieldMap, $acf): array {
 
         $format_term = function ($term_id) use ($taxonomy) {
             $term = get_term($term_id, $taxonomy);
-            if (!$term || is_wp_error($term)) return null;
+            if (!$term || is_wp_error($term)) {
+                return null;
+            }
 
             $base = [
                 'id'   => (int) (get_field('causeway_id', $taxonomy . '_' . $term->term_id) ?: $term->term_id),
@@ -450,10 +478,14 @@ function format_related_acf_ids(array $fieldMap, $acf): array {
                     foreach ($languages as $lang_code => $lang_info) {
                         $translated_term_id = apply_filters('wpml_object_id', $term_id, $taxonomy, true, $lang_code);
 
-                        if (!$translated_term_id || $translated_term_id === $term_id) continue;
+                        if (!$translated_term_id || $translated_term_id === $term_id) {
+                            continue;
+                        }
 
                         $translated_term = get_term($translated_term_id, $taxonomy);
-                        if (!$translated_term || is_wp_error($translated_term)) continue;
+                        if (!$translated_term || is_wp_error($translated_term)) {
+                            continue;
+                        }
 
                         $translated_causeway_id = get_field('causeway_id', $taxonomy . '_' . $translated_term_id);
 
@@ -471,13 +503,17 @@ function format_related_acf_ids(array $fieldMap, $acf): array {
             $formatted = [];
             foreach ($acf[$acfKey] as $term_id) {
                 $data = $format_term($term_id);
-                if ($data) $formatted[] = $data;
+                if ($data) {
+                    $formatted[] = $data;
+                }
             }
             $output[$outputKey] = $formatted;
         } elseif (is_numeric($acf[$acfKey])) {
             $term_id = $acf[$acfKey];
             $data = $format_term($term_id);
-            if ($data) $output[$outputKey] = $data;
+            if ($data) {
+                $output[$outputKey] = $data;
+            }
         }
     }
 
@@ -485,7 +521,8 @@ function format_related_acf_ids(array $fieldMap, $acf): array {
 }
 
 
-function format_locations($details, $coords, $post_id) {
+function format_locations($details, $coords, $post_id)
+{
     $community_terms = wp_get_post_terms($post_id, 'listing-communities');
     $community = $community_terms[0] ?? null;
 
@@ -523,7 +560,8 @@ function format_locations($details, $coords, $post_id) {
     ]];
 }
 
-function map_terms($term_ids, $taxonomy) {
+function map_terms($term_ids, $taxonomy)
+{
     $out = [];
 
     if (!is_array($term_ids)) {
@@ -543,7 +581,8 @@ function map_terms($term_ids, $taxonomy) {
     return $out;
 }
 
-function format_websites($sites) {
+function format_websites($sites)
+{
     $formatted = [];
 
     if (!is_array($sites)) {
@@ -564,7 +603,8 @@ function format_websites($sites) {
     return $formatted;
 }
 
-function format_attachments($items, $listing_id) {
+function format_attachments($items, $listing_id)
+{
     $formatted = [];
 
     if (!is_array($items)) {
@@ -586,7 +626,8 @@ function format_attachments($items, $listing_id) {
     return $formatted;
 }
 
-function format_related($ids) {
+function format_related($ids)
+{
     $out = [];
 
     if (!is_array($ids)) {
@@ -602,11 +643,12 @@ function format_related($ids) {
     return $out;
 }
 
-function format_dates($dates): array {
+function format_dates($dates): array
+{
 
     $result = [];
 
-    if(!is_array($dates)) {
+    if (!is_array($dates)) {
         return $result;
     }
 
@@ -628,29 +670,29 @@ function format_dates($dates): array {
  * @param array $srcRows   Attachments repeater ACF from the translated post
  * @param string $lang     Language code, e.g. 'fr'
  */
-function add_alt_translations_to_attachments( array &$base, array $srcRows, string $lang ): void {
-    foreach ( $base as $idx => &$att ) {
-
+function add_alt_translations_to_attachments(array &$base, array $srcRows, string $lang): void
+{
+    foreach ($base as $idx => &$att) {
         // Ensure the translations container exists
-        if ( ! isset( $att['translations'] ) ) {
+        if (! isset($att['translations'])) {
             $att['translations'] = [];
         }
 
         /* ── Priority 1 : same-row repeater field ─────────────────── */
-        if ( ! empty( $srcRows[ $idx ]['alt'] ) ) {
+        if (! empty($srcRows[ $idx ]['alt'])) {
             $att['translations'][ $lang ] = [
-                'alt' => html_entity_decode( $srcRows[ $idx ]['alt'] ),
+                'alt' => html_entity_decode($srcRows[ $idx ]['alt']),
             ];
             continue;
         }
 
         /* ── Priority 2 : WPML media translation (fallback) ───────── */
-        if ( ! empty( $att['id'] ) ) {
-            $translated_media_id = apply_filters( 'wpml_object_id', $att['id'], 'attachment', true, $lang );
-            if ( $translated_media_id && $translated_media_id !== $att['id'] ) {
-                $alt = get_post_meta( $translated_media_id, '_wp_attachment_image_alt', true );
-                if ( $alt ) {
-                    $att['translations'][ $lang ] = [ 'alt' => html_entity_decode( $alt ) ];
+        if (! empty($att['id'])) {
+            $translated_media_id = apply_filters('wpml_object_id', $att['id'], 'attachment', true, $lang);
+            if ($translated_media_id && $translated_media_id !== $att['id']) {
+                $alt = get_post_meta($translated_media_id, '_wp_attachment_image_alt', true);
+                if ($alt) {
+                    $att['translations'][ $lang ] = [ 'alt' => html_entity_decode($alt) ];
                 }
             }
         }
