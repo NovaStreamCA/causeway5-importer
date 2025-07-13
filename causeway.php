@@ -139,3 +139,36 @@ function run_causeway_export() {
         Causeway_Importer::import();
     }
 }
+
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+
+    /**
+     * Manage Causeway imports.
+     */
+    class Causeway_CLI_Command {
+
+        /**
+         * Run the full import.
+         *
+         * ## EXAMPLES
+         *
+         *     wp causeway import
+         *
+         * @when after_wp_load
+         */
+        public function import() {
+            $start = microtime( true );
+
+            // Lift PHP limits if you like:
+            ini_set( 'memory_limit', '1G' );
+            set_time_limit( 0 );
+
+            Causeway_Importer::import();
+
+            $secs = number_format( microtime( true ) - $start, 2 );
+            WP_CLI::success( "Import finished in {$secs}s" );
+        }
+    }
+
+    WP_CLI::add_command( 'causeway', 'Causeway_CLI_Command' );
+}

@@ -7,6 +7,7 @@ class Causeway_Importer {
     private static $listing_map = [];
     private static $start;
     private static $baseURL = 'https://api-causeway5.novastream.dev/';
+    private static $term_cache = [];
 
     public static function import() {
         error_log('start import');
@@ -19,6 +20,11 @@ class Causeway_Importer {
         define('CAUSEWAY_IMPORTING', true);
         self::$start = microtime(true);
 
+         /* ── PERFORMANCE GUARD-RAILS ───────────────────────────── */
+        if ( function_exists( 'set_time_limit' ) ) { @set_time_limit( 0 ); }
+        if ( function_exists( 'wp_suspend_cache_addition' ) ) { wp_suspend_cache_addition( true ); }
+        wp_defer_term_counting( true );           // no recounts on every insert
+        
         // Preload and cache calls that would be used multiple times
         self::$areas = self::fetch_remote('areas');
         self::$communities = self::fetch_remote('communities');
@@ -50,20 +56,23 @@ class Causeway_Importer {
         error_log('✅ Import Completed. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
 
         self::export_listings();
+
+        wp_defer_term_counting( false );
+        wp_suspend_cache_addition( false );
     }
 
     private static function fetch_remote($endpoint) {
         $response = wp_remote_get(self::$baseURL . $endpoint);
 
         if(is_wp_error($response)) {
-            error_log(`❌ WP Error ({$endpoint}): ` . $response->get_error_message());
+            error_log('❌ WP Error (' . $endpoint . '): ' . $response->get_error_message());
             return [];
         }
 
         $data = json_decode(wp_remote_retrieve_body($response), true);
 
         if (is_wp_error($data)) {
-            error_log(`❌ JSON Error ({$endpoint}): ` . $data->get_error_message());
+            error_log('❌ JSON Error (' . $endpoint . '): ' . $data->get_error_message());
             return [];
         }
 
@@ -311,7 +320,7 @@ class Causeway_Importer {
         error_log('Importing seasons...');
 
         $seasons = [
-            ['id' => 1, 'name' => 'Any Season'],
+            ['id' => 1, 'name' => 'All Seasons'],
             ['id' => 2, 'name' => 'Spring'],
             ['id' => 3, 'name' => 'Summer'],
             ['id' => 4, 'name' => 'Fall'],
@@ -394,6 +403,8 @@ class Causeway_Importer {
     }
 
     private static function assign_area_communities() {
+        error_log('Assigning area communities...');
+
         foreach (self::$areas as $area) {
             $term_id = self::get_term_id_by_causeway_id('listing-areas', $area['id']);
             if (!$term_id) continue;
@@ -406,6 +417,8 @@ class Causeway_Importer {
 
             update_field('related_communities', $related, 'listing-areas_' . $term_id);
         }
+
+        error_log('✅ Area communities assigned. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
     }
 
     private static function assign_area_slugs(): void {
@@ -663,6 +676,8 @@ class Causeway_Importer {
     
 
     private static function assign_community_areas_and_regions() {
+        error_log('Assigning community areas and regions...');
+
         foreach (self::$communities as $community) {
             $term_id = self::get_term_id_by_causeway_id('listing-communities', $community['id']);
             if (!$term_id) continue;
@@ -682,9 +697,12 @@ class Causeway_Importer {
             update_field('related_areas', $area_ids, 'listing-communities_' . $term_id);
             update_field('related_regions', $region_ids, 'listing-communities_' . $term_id);
         }
+
+        error_log('✅ Community areas and regions assigned. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
     }
 
     private static function assign_region_communities() {
+        error_log('Assigning region communities...');
         foreach (self::$regions as $region) {
             $term_id = self::get_term_id_by_causeway_id('listing-regions', $region['id']);
             if (!$term_id) continue;
@@ -697,6 +715,7 @@ class Causeway_Importer {
 
             update_field('related_communities', $related, 'listing-regions_' . $term_id);
         }
+        error_log('✅ Region communities assigned. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
     }
 
     private static function import_listings() {
@@ -967,20 +986,17 @@ class Causeway_Importer {
     }
 
     // Helper functions
-    private static function get_term_by_causeway_id($causeway_id, $taxonomy) {
-        $terms = get_terms([
-            'taxonomy' => $taxonomy,
-            'hide_empty' => false,
-        ]);
-
-        foreach ($terms as $term) {
-            $stored_id = get_field('causeway_id', $taxonomy . '_' . $term->term_id);
-            if ((int) $stored_id === (int) $causeway_id) {
-                return $term;
+    private static function get_term_by_causeway_id( int $causeway_id, string $taxonomy ) {
+        if ( ! isset( self::$term_cache[ $taxonomy ] ) ) {
+            $terms  = get_terms( [ 'taxonomy' => $taxonomy, 'hide_empty' => false ] );
+            $map    = [];
+            foreach ( $terms as $t ) {
+                $id = (int) get_field( 'causeway_id', "{$taxonomy}_{$t->term_id}" );
+                if ( $id ) { $map[ $id ] = $t; }
             }
+            self::$term_cache[ $taxonomy ] = $map;
         }
-
-        return null;
+        return self::$term_cache[ $taxonomy ][ $causeway_id ] ?? null;
     }
 
     private static function get_term_id_by_causeway_id($taxonomy, $causeway_id) {
