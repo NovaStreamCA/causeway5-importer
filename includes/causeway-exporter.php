@@ -90,6 +90,8 @@ function get_listings($request)
             'websites'      => format_websites($acf['websites'] ?? []),
             'attachments'   => format_attachments($acf['attachments'] ?? [], $id),
             'dates'         => format_dates($acf['dates'] ?? []),
+            'next_occurrence' => $acf['next_occurrence'] ?? null,          // string 'Y-m-d H:i:s'
+            'occurrences'     => format_occurrences( is_array($acf['all_occurrences']) ? $acf['all_occurrences'] : [] ),
         ];
 
         $related_posts = get_field('related_listings', $id) ?: [];
@@ -663,6 +665,19 @@ function format_dates($dates): array
     }
 
     return $result;
+}
+
+function format_occurrences(array $rows): array {
+    $out = [];
+
+    foreach ($rows as $row) {
+        $out[] = [
+            'start_at' => $row['occurrence_start'] ?? null,
+            'end_at'   => $row['occurrence_end']   ?? null,
+        ];
+    }
+
+    return $out;
 }
 
 /**

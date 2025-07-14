@@ -1021,8 +1021,6 @@ class Causeway_Importer
             update_field('all_occurrences', $rows, $post_id);     // repeater
             update_field('next_occurrence',  $next, $post_id);    // single date_time_picker
 
-            exit();
-
             // error_log("✅ Updated Listing: " . $post_title . " (ID: $post_id)");
         }
 
