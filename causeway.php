@@ -12,6 +12,20 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// ──────────────────────────────────────────
+// Composer autoload – needed for Carbon & RRule
+// ──────────────────────────────────────────
+if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+    require __DIR__ . '/vendor/autoload.php';
+} else {
+    add_action('admin_notices', function () {
+        echo '<div class="notice notice-error"><p>
+            Causeway Importer: run <code>composer install</code> inside the plugin to generate the autoloader.
+        </p></div>';
+    });
+    return;
+}
+
 require_once plugin_dir_path(__FILE__) . 'admin/acf-fields.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-causeway-importer.php';
 require_once plugin_dir_path(__FILE__) . 'admin/class-causeway-admin.php';

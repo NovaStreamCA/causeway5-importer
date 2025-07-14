@@ -57,6 +57,10 @@
     <custom-field action="copy">category_icon_light</custom-field>
     <custom-field action="copy">category_icon_dark</custom-field>
     <custom-field action="copy">amenity_icon</custom-field>
+    <custom-field action="copy">next_occurrence</custom-field>
+    <custom-field action="copy">all_occurrences</custom-field>
+    <custom-field action="copy">occurrence_start</custom-field>
+    <custom-field action="copy">occurrence_end</custom-field>
 
     <!-- Translate fields -->
     <custom-field action="translate">opengraph_description</custom-field>

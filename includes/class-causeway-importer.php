@@ -1,4 +1,6 @@
 <?php
+use Carbon\Carbon;
+use RRule\RRule;
 
 class Causeway_Importer
 {
@@ -763,6 +765,7 @@ class Causeway_Importer
 
             update_field('related_areas', $area_ids, 'listing-communities_' . $term_id);
             update_field('related_regions', $region_ids, 'listing-communities_' . $term_id);
+            error_log("Assigned community {$community['name']} (ID: {$community['id']}) to areas: " . implode(', ', $area_ids) . " and regions: " . implode(', ', $region_ids));
         }
 
         error_log('✅ Community areas and regions assigned. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
@@ -786,6 +789,7 @@ class Causeway_Importer
             }
 
             update_field('related_communities', $related, 'listing-regions_' . $term_id);
+            error_log("Assigned region {$region['name']} (ID: {$region['id']}) to communities: " . implode(', ', $related));
         }
         error_log('✅ Region communities assigned. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
     }
@@ -798,6 +802,10 @@ class Causeway_Importer
         $response = wp_remote_get(self::$baseURL . 'listings?search=listings.status&compare==&value=Published', [
             'timeout' => 1200,
         ]);
+
+        // $response = wp_remote_get(self::$baseURL . 'listings?search=listings.id&compare==&value=1122', [
+        //     'timeout' => 1200,
+        // ]);
 
         if (is_wp_error($response)) {
             error_log('❌ Failed to fetch listings');
@@ -1004,6 +1012,17 @@ class Causeway_Importer
             }
             update_field('dates', $dates, $post_id);
 
+            // ②  Derive and store occurrences + next upcoming
+            [$rows, $next] = self::build_occurrences_for_acf($dates);
+
+            // error_log('Occurrences: ' . print_r($rows, true));
+            // error_log('Next occurrence: ' . print_r($next, true));
+
+            update_field('all_occurrences', $rows, $post_id);     // repeater
+            update_field('next_occurrence',  $next, $post_id);    // single date_time_picker
+
+            exit();
+
             // error_log("✅ Updated Listing: " . $post_title . " (ID: $post_id)");
         }
 
@@ -1202,4 +1221,75 @@ class Causeway_Importer
             error_log("🧹 Deleted $deleted_count stale terms from $taxonomy");
         }
     }
+
+    /**
+     * Turn the raw API “dates” repeater into:
+     *   • $rows → ready for the ACF repeater “all_occurrences”
+     *   • $next → string for the single date_time_picker “next_occurrence”
+     *
+     * @return array [$rows, $nextString]
+     */
+    private static function build_occurrences_for_acf(array $dates): array {
+        // $tz      = new DateTimeZone( get_option('timezone_string') ?: 'UTC' );
+        $tz      = new DateTimeZone('UTC');
+        $year    = (int) Carbon::now($tz)->year;
+        $format = 'Y-m-d H:i:s';                     // original API format
+        $rows    = [];
+        
+
+        // Collect every occurrence inside this calendar year
+        foreach ($dates as $entry) {
+
+            $start = Carbon::createFromFormat($format, $entry['start_at'] ?? '', $tz);
+            $end   = Carbon::createFromFormat($format, $entry['end_at']   ?? '', $tz);
+
+            if (!$start || !$end) {
+                error_log('Invalid date: ' . json_encode($entry));
+                continue;
+            }
+
+            $start->year($year);
+            $end  ->year($year);
+            $duration = $end->diffInMinutes($start);
+
+            if (!empty($entry['rrule'])) {
+                // Patch DTSTART / UNTIL to this year
+                $rr = preg_replace(
+                    ['/DTSTART:(\d{4})(\d{4}T\d{6}Z)/', '/UNTIL=(\d{4})(\d{4}T\d{6}Z)/'],
+                    ["DTSTART:{$year}\$2",              "UNTIL={$year}\$2"],
+                    $entry['rrule']
+                );
+                foreach ((new RRule($rr))->getOccurrencesBetween(
+                    Carbon::create($year,1,1,0,0,0,$tz),
+                    Carbon::create($year,12,31,23,59,59,$tz)
+                ) as $occ) {
+                    $rows[] = [
+                        'occurrence_start' => $occ->setTimezone($tz)->format('Y-m-d H:i:s'),
+                        'occurrence_end'   => $occ->modify("+{$duration} minutes")->setTimezone($tz)->format('Y-m-d H:i:s'),
+                    ];
+                }
+            } else {
+                $rows[] = [
+                    'occurrence_start' => $start->format('Y-m-d H:i:s'),
+                    'occurrence_end'   => $end  ->format('Y-m-d H:i:s'),
+                ];
+            }
+        }
+
+        usort($rows, fn($a,$b) => strcmp($a['occurrence_start'], $b['occurrence_start']));
+
+        // Pick the first one that’s still in the future
+        $now  = Carbon::now($tz)->format('Y-m-d H:i:s');
+        $next = null;
+        foreach ($rows as $r) {
+            if ($r['occurrence_start'] >= $now) {
+                $next = $r['occurrence_start'];
+                break;
+            }
+        }
+
+        return [$rows, $next];
+    }
+
+
 }

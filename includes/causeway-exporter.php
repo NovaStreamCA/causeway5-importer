@@ -315,6 +315,8 @@ function get_taxonomy_terms_with_acf($request)
             $attachments = $acf['area_attachments'];
         } elseif (!empty($acf['category_attachments']) && is_array($acf['category_attachments'])) {
             $attachments = $acf['category_attachments'];
+        } elseif (!empty($acf['attachments'])) {
+            $attachments = $acf['attachments'];
         }
 
         if (!empty($acf['area_slug'])) {

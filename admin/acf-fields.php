@@ -448,6 +448,32 @@ function causeway_register_acf_fields() {
                     ],
                 ],
                 [
+                    'key' => 'field_next_occurrence',
+                    'label' => 'Next Occurrence',
+                    'name' => 'next_occurrence',
+                    'type' => 'date_time_picker',
+                ],
+                [
+                    'key' => 'field_all_occurrences',
+                    'label' => 'All Occurrences',
+                    'name' => 'all_occurrences',
+                    'type' => 'repeater',
+                    'sub_fields' => [
+                        [
+                            'key' => 'field_occurrence_start',
+                            'label' => 'Occurrence Start',
+                            'name' => 'occurrence_start',
+                            'type' => 'date_time_picker',
+                        ],
+                        [
+                            'key' => 'field_occurrence_end',
+                            'label' => 'Occurrence End',
+                            'name' => 'occurrence_end',
+                            'type' => 'date_time_picker',
+                        ],
+                    ],
+                ],
+                [
                     'key' => 'field_related_listings',
                     'label' => 'Related Listings',
                     'name' => 'related_listings',

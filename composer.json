@@ -1,0 +1,13 @@
+{
+    "name": "novastream/causeway-importer",
+    "type": "wordpress-plugin",
+    "require": {
+      "rlanvin/php-rrule": "^2.6",
+      "nesbot/carbon": "^3.5"
+    },
+    "autoload": {
+      "psr-4": {
+        "NovaStream\\Causeway\\": "includes/"
+      }
+    }
+  }
