@@ -133,6 +133,9 @@ register_activation_hook(__FILE__, function () {
     if (!wp_next_scheduled('causeway_cron_hook')) {
         wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
     }
+    if (!wp_next_scheduled('causeway_cron_export_hook')) {
+        wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
+    }
     if (!wp_next_scheduled('causeway_clear_cron_hook')) {
         wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
     }
@@ -142,6 +145,9 @@ register_activation_hook(__FILE__, function () {
 add_action('init', function () {
     if (!wp_next_scheduled('causeway_cron_hook')) {
         wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
+    }
+    if (!wp_next_scheduled('causeway_cron_export_hook')) {
+        wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
     }
     if (!wp_next_scheduled('causeway_clear_cron_hook')) {
         wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
@@ -154,16 +160,30 @@ register_deactivation_hook(__FILE__, function () {
     if ($timestamp) {
         wp_unschedule_event($timestamp, 'causeway_cron_hook');
     }
+
+    $timestamp2 = wp_next_scheduled('causeway_cron_export_hook');
+    if ($timestamp2) {
+        wp_unschedule_event($timestamp2, 'causeway_cron_export_hook');
+    }
 });
 
-add_action('causeway_cron_hook', 'run_causeway_export');
+add_action('causeway_cron_hook', 'run_causeway_import_export');
+add_action('causeway_cron_export_hook', 'run_causeway_export');
 add_action('causeway_clear_cron_hook', 'clear_causeway_status');
+
+function run_causeway_import_export()
+{
+    error_log('🕑 Running Causeway import/export via cron @ ' . date('Y-m-d H:i:s'));
+    if (class_exists('Causeway_Importer')) {
+        Causeway_Importer::import();
+    }
+}
 
 function run_causeway_export()
 {
     error_log('🕑 Running Causeway export via cron @ ' . date('Y-m-d H:i:s'));
     if (class_exists('Causeway_Importer')) {
-        Causeway_Importer::import();
+        Causeway_Importer::export();
     }
 }
 

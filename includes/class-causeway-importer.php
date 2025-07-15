@@ -76,6 +76,10 @@ class Causeway_Importer
         wp_suspend_cache_addition(false);
     }
 
+    public static function export() {
+        self::export_listings();
+    }
+
     private static function fetch_remote($endpoint)
     {
         $response = wp_remote_get(
