@@ -502,6 +502,14 @@ function causeway_register_acf_fields() {
                 //     'required' => 1,
                 // ],
                 [
+                    'key' => 'field_causeway_api_url',
+                    'label' => 'Causeway API URL',
+                    'name' => 'causeway_api_url',
+                    'type' => 'url',
+                    'instructions' => 'Enter the API URL (e.g. https://api-causeway5.novastream.dev/)',
+                    'required' => 1,
+                ],
+                [
                     'key' => 'field_causeway_public_url',
                     'label' => 'Public Website URL',
                     'name' => 'causeway_public_url',

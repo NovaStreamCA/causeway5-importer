@@ -16,6 +16,12 @@ class Causeway_Importer
     public static function import()
     {
         error_log('start import');
+        
+        $baseURL = get_field('causeway_api_url', 'option');
+
+        if ($baseURL) {
+            self::$baseURL = $baseURL;
+        }
 
         /* ── FORCE ENGLISH ───────────────────────── */
         $orig_lang = apply_filters('wpml_current_language', null);
