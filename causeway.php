@@ -63,7 +63,7 @@ function causeway_register_listing_post_type()
         'has_archive' => true,
         'show_in_rest' => true,
         'supports' => ['title', 'editor', 'excerpt', 'thumbnail'],
-        'rewrite' => ['slug' => 'listings'],
+        'rewrite' => ['slug' => 'listing', 'with_front' => false,],
         'menu_icon' => 'dashicons-admin-site-alt3', // You can swap this with any Dashicon or SVG
     ]);
 }
