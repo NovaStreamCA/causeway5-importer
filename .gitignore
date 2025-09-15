@@ -1,0 +1,5 @@
+# Ignore all Brotli files
+*.br
+
+# Ignore all Gzip files
+*.gz

@@ -409,7 +409,7 @@ function causeway_register_acf_fields() {
                     'key' => 'field_location_details',
                     'label' => 'Location Details',
                     'name' => 'location_details',
-                    'type' => 'group',
+                    'type' => 'repeater',
                     'sub_fields' => [
                         ['key' => 'field_location_state', 'label' => 'State', 'name' => 'state', 'type' => 'text'],
                         ['key' => 'field_location_country', 'label' => 'Country', 'name' => 'country', 'type' => 'text'],
@@ -419,6 +419,7 @@ function causeway_register_acf_fields() {
                         ['key' => 'field_location_place_id', 'label' => 'Place ID', 'name' => 'place_id', 'type' => 'text'],
                         ['key' => 'field_location_latitude', 'label' => 'Latitude', 'name' => 'latitude', 'type' => 'text'],
                         ['key' => 'field_location_longitude', 'label' => 'Longitude', 'name' => 'longitude', 'type' => 'text'],
+                        ['key' => 'field_location_community', 'label' => 'Community', 'name' => 'community', 'type' => 'number'],
                     ],
                 ],
                 [

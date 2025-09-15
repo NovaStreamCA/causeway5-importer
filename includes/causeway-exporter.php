@@ -86,7 +86,7 @@ function get_listings($request)
             'amenities'     => get_terms_with_acf($id, 'listings-amenities'),
             'campaigns'     => get_terms_with_acf($id, 'listing-campaigns'),
             'seasons'       => get_terms_with_acf($id, 'listings-seasons'),
-            'locations'     => format_locations($acf['location_details'] ?? [], $acf['location'] ?? [], $id),
+            'locations'     => format_locations($acf['location_details'] ?? [], $id),
             'websites'      => format_websites($acf['websites'] ?? []),
             'attachments'   => format_attachments($acf['attachments'] ?? [], $id),
             'dates'         => format_dates($acf['dates'] ?? []),
@@ -525,43 +525,109 @@ function format_related_acf_ids(array $fieldMap, $acf): array
 }
 
 
-function format_locations($details, $coords, $post_id)
-{
-    $community_terms = wp_get_post_terms($post_id, 'listing-communities');
-    $community = $community_terms[0] ?? null;
+/**
+ * Export locations from ACF repeater `locations`, resolving community per row.
+ *
+ * @param array $rows     Repeater rows. Expected subfields:
+ *                        name, civic_address, postal_code, state, country,
+ *                        latitude, longitude, place_id, community (Term ID or WP_Term)
+ * @param int   $post_id  Listing post ID
+ * @return array<int, array<string, mixed>>
+ */
+function format_locations($rows, $post_id) {
 
-    $community_data = null;
-    if ($community) {
-        $acf = get_fields('listing-communities_' . $community->term_id) ?: [];
-        $areas = $acf['related_areas'] ?? [];
-        $regions = $acf['related_regions'] ?? [];
-        $county = wp_get_post_terms($post_id, 'listing-counties')[0] ?? null;
+    if (!is_array($rows)) {
+        $rows = [];
+    }
 
-        $community_data = [
-            'id'   => (int) ($acf['causeway_id'] ?? $community->term_id),
-            'name' => html_entity_decode($community->name),
-            'areas' => map_terms($areas, 'listing-areas'),
+    error_log('Formatting locations for post ID: ' . $post_id);
+    // Fallback community (listing's first, used only if a row lacks its own)
+    $primary_communities = wp_get_post_terms($post_id, 'listing-communities');
+    $fallback_community  = $primary_communities[0] ?? null;
+
+    // County is per-listing
+    $county_term = (wp_get_post_terms($post_id, 'listing-counties')[0] ?? null);
+
+    // Small caches for speed
+    static $community_term_cache = []; // [term_id => WP_Term|null]
+    static $community_data_cache = []; // [term_id => array|null]
+
+    $resolve_community_term = function ($val) use (&$community_term_cache) {
+        // Accept Term ID, WP_Term, or string (slug/name)
+        if ($val instanceof WP_Term) {
+            return $val;
+        }
+        if (is_numeric($val)) {
+            $id = (int) $val;
+            if (!array_key_exists($id, $community_term_cache)) {
+                $t = get_term($id, 'listing-communities');
+                $community_term_cache[$id] = ($t && !is_wp_error($t)) ? $t : null;
+            }
+            return $community_term_cache[$id];
+        }
+        if (is_string($val) && $val !== '') {
+            $t = get_term_by('slug', $val, 'listing-communities');
+            if (!$t) $t = get_term_by('name', $val, 'listing-communities');
+            return ($t && !is_wp_error($t)) ? $t : null;
+        }
+        return null;
+    };
+
+    $build_community_data = function ($community_term) use (&$community_data_cache, $county_term) {
+        if (!$community_term) return null;
+
+        $cid = (int) $community_term->term_id;
+        if (isset($community_data_cache[$cid])) {
+            return $community_data_cache[$cid];
+        }
+
+        // ACF on the community term
+        $cacf    = get_fields('listing-communities_' . $cid) ?: [];
+        $areas   = $cacf['related_areas']   ?? [];
+        $regions = $cacf['related_regions'] ?? [];
+
+        $data = [
+            'id'      => (int) ($cacf['causeway_id'] ?? $cid),
+            'name'    => html_entity_decode($community_term->name),
+            'areas'   => map_terms($areas, 'listing-areas'),
             'regions' => map_terms($regions, 'listing-regions'),
-            'county' => $county ? [
-                'id' => (int) get_field('causeway_id', 'listing-counties_' . $county->term_id),
-                'name' => html_entity_decode($county->name),
+            'county'  => $county_term ? [
+                'id'   => (int) get_field('causeway_id', 'listing-counties_' . $county_term->term_id),
+                'name' => html_entity_decode($county_term->name),
             ] : null,
+        ];
+
+        $community_data_cache[$cid] = $data;
+        return $data;
+    };
+
+    $out = [];
+    foreach ($rows as $row) {
+        // Coordinates (accept alt keys lat/lng if present)
+        $lat = $row['latitude']  ?? $row['lat']  ?? null;
+        $lng = $row['longitude'] ?? $row['lng'] ?? null;
+
+        // Resolve per-row community (preferred), else fallback
+        $row_comm_val  = $row['community'] ?? null; // Term ID (preferred) or WP_Term/string
+        $row_comm_term = $resolve_community_term($row_comm_val) ?: $fallback_community;
+        $community     = $build_community_data($row_comm_term);
+
+        $out[] = [
+            'id'            => (int) $post_id,
+            'name'          => isset($row['name'])          ? html_entity_decode((string) $row['name'])          : '',
+            'civic_address' => isset($row['civic_address']) ? html_entity_decode((string) $row['civic_address']) : '',
+            'postal_code'   => isset($row['postal_code'])   ? (string) $row['postal_code']   : '',
+            'state'         => isset($row['state'])         ? (string) $row['state']         : '',
+            'country'       => isset($row['country'])       ? (string) $row['country']       : '',
+            'latitude'      => ($lat === '' || $lat === null) ? 0.0 : (float) $lat,
+            'longitude'     => ($lng === '' || $lng === null) ? 0.0 : (float) $lng,
+            'place_id'      => isset($row['place_id']) && $row['place_id'] !== '' ? (string) $row['place_id'] : null,
+            'lookup_method' => 'Civic',
+            'community'     => $community,
         ];
     }
 
-    return [[
-        'id'            => $post_id,
-        'name'          => $details['name'] ?? '',
-        'civic_address' => $details['civic_address'] ?? '',
-        'postal_code'   => $details['postal_code'] ?? '',
-        'state'         => $details['state'] ?? '',
-        'country'       => $details['country'] ?? '',
-        'latitude'      => floatval($details['latitude'] ?? $coords['lat'] ?? 0),
-        'longitude'     => floatval($details['longitude'] ?? $coords['lng'] ?? 0),
-        'place_id'      => $details['place_id'] ?? null,
-        'lookup_method' => 'Civic',
-        'community'     => $community_data,
-    ]];
+    return $out;
 }
 
 function map_terms($term_ids, $taxonomy)

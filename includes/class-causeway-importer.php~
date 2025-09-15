@@ -16,7 +16,7 @@ class Causeway_Importer
     public static function import()
     {
         error_log('start import');
-        
+
         $baseURL = get_field('causeway_api_url', 'option');
 
         if ($baseURL) {
@@ -893,10 +893,6 @@ class Causeway_Importer
             // Save ID of imported listing
             $imported_ids[] = $causeway_id;
 
-            if ($post_id == 14024) {
-                var_dump($item['categories']);
-            }
-
             // ACF Meta
             update_field('causeway_id', $causeway_id, $post_id);
             update_field('provider', $item['provider'] ?? '', $post_id);
@@ -994,7 +990,7 @@ class Causeway_Importer
             update_field('all_occurrences', $rows, $post_id);     // repeater
             update_field('next_occurrence',  $next, $post_id);    // single date_time_picker
 
-            // error_log("✅ Updated Listing: " . $post_title . " (ID: $post_id)");
+            error_log("✅ Updated Listing: " . $post_title . " (ID: $post_id)");
         }
 
         error_log("Assigning related listings...");
@@ -1313,7 +1309,7 @@ class Causeway_Importer
         $year    = (int) Carbon::now($tz)->year;
         $format = 'Y-m-d H:i:s';                     // original API format
         $rows    = [];
-        
+
 
         // Collect every occurrence inside this calendar year
         foreach ($dates as $entry) {
