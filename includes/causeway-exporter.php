@@ -80,6 +80,7 @@ function get_listings($request)
             'activated_at'  => $acf['activated_at'] ?? null,
             'expired_at'    => $acf['expired_at'] ?? null,
             'is_featured'   => (bool) ($acf['is_featured'] ?? false),
+            'is_in_national_park'   => (bool) ($acf['is_in_national_park'] ?? false),
             'price'         => floatval($acf['price'] ?? 0),
             'types'         => get_terms_with_acf($id, 'listing-type'),
             'categories'    => get_terms_with_acf($id, 'listings-category', true),

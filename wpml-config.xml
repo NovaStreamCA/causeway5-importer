@@ -27,6 +27,7 @@
     <custom-field action="copy">provider</custom-field>
     <custom-field action="copy">status</custom-field>
     <custom-field action="copy">is_featured</custom-field>
+    <custom-field action="copy">is_in_national_park</custom-field>
     <!-- <custom-field action="copy">causeway_api_token</custom-field> -->
     <custom-field action="copy">causeway_public_url</custom-field>
     <custom-field action="copy">headless_api_secret</custom-field>

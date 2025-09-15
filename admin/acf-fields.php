@@ -348,6 +348,7 @@ function causeway_register_acf_fields() {
                 ['key' => 'field_phone_tollfree', 'label' => 'Phone Toll-Free', 'name' => 'phone_tollfree', 'type' => 'text'],
                 ['key' => 'field_price', 'label' => 'Price', 'name' => 'price', 'type' => 'number'],
                 ['key' => 'field_is_featured', 'label' => 'Is Featured?', 'name' => 'is_featured', 'type' => 'true_false'],
+                ['key' => 'field_is_in_national_park', 'label' => 'Is In National Park?', 'name' => 'is_in_national_park', 'type' => 'true_false'],
                 ['key' => 'field_opengraph_title', 'label' => 'OG Title', 'name' => 'opengraph_title', 'type' => 'text'],
                 ['key' => 'field_opengraph_description', 'label' => 'OG Description', 'name' => 'opengraph_description', 'type' => 'textarea'],
                 ['key' => 'field_contact_name', 'label' => 'Contact Name', 'name' => 'contact_name', 'type' => 'text'],
