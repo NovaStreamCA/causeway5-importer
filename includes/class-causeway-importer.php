@@ -912,6 +912,7 @@ class Causeway_Importer
             update_field('price', $item['price'] ?? 0, $post_id);
             update_field('is_featured', $item['is_featured'] ?? false, $post_id);
             update_field('is_in_national_park', $item['is_in_national_park'] ?? false, $post_id);
+            update_field('is_campaign_only', $item['is_campaign_only'] ?? false, $post_id);
             update_field('opengraph_title', $item['opengraph_title'] ?? '', $post_id);
             update_field('opengraph_description', $item['opengraph_description'] ?? '', $post_id);
             update_field('activated_at', $item['activated_at'] ?? '', $post_id);
