@@ -1,0 +1,68 @@
+name: Deploy WordPress Plugin via Tailscale
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: prod-wp-plugin-deploy
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      # Repo Variables (Settings → Secrets and variables → Actions → Variables)
+      SERVER_ADDRESS: ${{ vars.SERVER_ADDRESS }}     # e.g. myserver.tailxxxx.ts.net
+      USERNAME: ${{ vars.USERNAME }}                 # e.g. deploy
+      WP_PLUGINS_DIR: ${{ vars.WP_PLUGINS_DIR }}     # e.g. /var/www/site/current/wp-content/plugins
+      PLUGIN_SLUG: ${{ vars.PLUGIN_SLUG }}           # e.g. my-custom-plugin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # use the exact release tag contents
+
+      # --- Tailscale ---
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          tags: tag:ci
+          version: latest
+          use-cache: "true"
+
+      - name: Ensure remote plugin dir exists
+        run: |
+          set -euo pipefail
+          tailscale ssh "${USERNAME}@${SERVER_ADDRESS}" \
+            "mkdir -p '${WP_PLUGINS_DIR}/${PLUGIN_SLUG}' && test -d '${WP_PLUGINS_DIR}/${PLUGIN_SLUG}'"
+
+      # --- Upload plugin via tar stream (replace-only, no deletes) ---
+      - name: Upload plugin over Tailscale SSH (tar stream, no deletes)
+        run: |
+          set -euo pipefail
+
+          # Defensive excludes; tweak as needed for your plugin repo.
+          TAR_EXCLUDES=(
+            --exclude='.git'
+            --exclude='.github'
+            --exclude='.gitignore'
+            --exclude='.editorconfig'
+            --exclude='.DS_Store'
+            --exclude='node_modules'
+            --exclude='**/*.map'
+          )
+
+          # Stream current repo to the target plugin directory.
+          tar "${TAR_EXCLUDES[@]}" -cf - . \
+          | tailscale ssh "${USERNAME}@${SERVER_ADDRESS}" \
+              "tar -C '${WP_PLUGINS_DIR}/${PLUGIN_SLUG}' -xpf -"
