@@ -63,6 +63,7 @@
     <custom-field action="copy">all_occurrences</custom-field>
     <custom-field action="copy">occurrence_start</custom-field>
     <custom-field action="copy">occurrence_end</custom-field>
+    <custom-field action="copy">alert_color</custom-field>
 
     <!-- Translate fields -->
     <custom-field action="translate">opengraph_description</custom-field>
