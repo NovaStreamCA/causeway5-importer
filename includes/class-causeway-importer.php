@@ -961,6 +961,7 @@ class Causeway_Importer
                     'url' => $site['url'] ?? '',
                     'name' => $site['name'] ?? '',
                     'type_name' => $site['type']['name'] ?? '',
+                    'type_id' => $site['type']['id'] ?? '',
                 ];
             }
             update_field('websites', $websites, $post_id);

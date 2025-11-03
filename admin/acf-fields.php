@@ -394,6 +394,7 @@ function causeway_register_acf_fields() {
                         ['key' => 'field_website_url', 'label' => 'URL', 'name' => 'url', 'type' => 'url'],
                         ['key' => 'field_website_name', 'label' => 'Name', 'name' => 'name', 'type' => 'text'],
                         ['key' => 'field_website_type', 'label' => 'Type Name', 'name' => 'type_name', 'type' => 'text'],
+                        ['key' => 'field_website_type_id', 'label' => 'Causeway Type ID', 'name' => 'type_id', 'type' => 'number'],
                     ],
                 ],
                 [

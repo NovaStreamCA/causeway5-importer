@@ -662,12 +662,17 @@ function format_websites($sites)
     }
 
     foreach ($sites as $i => $site) {
+        $typeId = null;
+        if (array_key_exists('type_id', $site) && $site['type_id'] !== '' && $site['type_id'] !== null) {
+            $typeId = is_numeric($site['type_id']) ? ($site['type_id'] + 0) : null; // +0 casts to int/float as needed
+        }
+        
         $formatted[] = [
             'id' => $i + 1,
             'url' => $site['url'],
             'name' => $site['name'],
             'type' => [
-                'id' => $i + 1,
+                'id' => $typeId,
                 'name' => $site['type_name'] ?? 'General',
             ],
         ];
