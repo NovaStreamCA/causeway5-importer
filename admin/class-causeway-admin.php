@@ -6,37 +6,64 @@ class Causeway_Admin {
     }
 
     public static function add_admin_page() {
+        // Import page (always visible)
         add_submenu_page(
             'edit.php?post_type=listing',       // Parent menu under Listings CPT
-            'Import/Export Causeway',                 // Page title
-            'Import/Export Causeway',                 // Menu title
+            'Import Causeway',                   // Page title
+            'Import Causeway',                   // Menu title
             'manage_options',                    // Capability
             'causeway-importer',                 // Menu slug
-            [self::class, 'render_page']         // Callback function
+            [self::class, 'render_import_page']  // Callback function
         );
+
+        // Export page (only if headless)
+        $is_headless = (bool) get_field('is_headless', 'option');
+        if ($is_headless) {
+            add_submenu_page(
+                'edit.php?post_type=listing',       // Parent menu under Listings CPT
+                'Export Causeway',                   // Page title
+                'Export Causeway',                   // Menu title
+                'manage_options',                    // Capability
+                'causeway-exporter',                 // Menu slug
+                [self::class, 'render_export_page']  // Callback function
+            );
+        }
     }
 
-    public static function render_page() {
+    public static function render_import_page() {
         error_log('show page');
+        $is_headless = (bool) get_field('is_headless', 'option');
+        if (isset($_GET['import_queued']) && $_GET['import_queued'] === '1') {
+            echo '<div class="notice notice-info is-dismissible"><p>🕑 Import scheduled. It will run in the background shortly. Importing can take up to 30 minutes.</p></div>';
+        }
         if (isset($_GET['imported']) && $_GET['imported'] === '1') {
             echo '<div class="notice notice-success is-dismissible"><p>✅ Listings imported successfully.</p></div>';
+        }
+        ?>
+<div class="wrap">
+    <h1>Causeway Data Importer <span style='font-size: 1.1rem;'>(Causeway to Here)</span></h1>
+    <p>This tool will manually import all listings and taxonomy data from the external Causeway API into your WordPress site.</p>
+    <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
+        <?php wp_nonce_field('causeway_import_action', 'causeway_import_nonce'); ?>
+        <input type="hidden" name="action" value="causeway_manual_import">
+        <input type="submit" name="causeway_import_submit" class="button button-primary" value="Start Import">
+    </form>
+</div>
+<?php
+    }
+
+    public static function render_export_page() {
+        $is_headless = (bool) get_field('is_headless', 'option');
+        if (!$is_headless) {
+            wp_die('Export is disabled: this site is not configured as headless.');
         }
         if (isset($_GET['exported']) && $_GET['exported'] === '1') {
             echo '<div class="notice notice-success is-dismissible"><p>✅ Listings exported successfully.</p></div>';
         }
         ?>
 <div class="wrap">
-    <h1>Causeway Data Importer <span style='font-size: 1.1rem;'>(Causeway to Here)</span></h1>
-    <p>This tool will manually import all listings and taxonomy data from the external Causeway API into your WordPress site and then automatically send it to the public angular
-        site.</p>
-    <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
-        <?php wp_nonce_field('causeway_import_action', 'causeway_import_nonce'); ?>
-        <input type="hidden" name="action" value="causeway_manual_import">
-        <input type="submit" name="causeway_import_submit" class="button button-primary" value="Start Import">
-    </form>
-
     <h1>Causeway Data Exporter <span style='font-size: 1.1rem;'>(Here to Public Website)</span></h1>
-    <p>This tool will manually export all listings and taxonomy data from this website into the public headless Angular site.</p>
+    <p>This tool will manually export all listings and taxonomy data from this website into the public headless site.</p>
     <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="margin-top: 20px;">
         <?php wp_nonce_field('causeway_export_action', 'causeway_export_nonce'); ?>
         <input type="hidden" name="action" value="causeway_manual_export">

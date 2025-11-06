@@ -497,14 +497,14 @@ function causeway_register_acf_fields() {
             'key' => 'group_causeway_settings',
             'title' => 'Causeway Import Settings',
             'fields' => [
-                // [
-                //     'key' => 'field_causeway_token',
-                //     'label' => 'API Token',
-                //     'name' => 'causeway_api_token',
-                //     'type' => 'text',
-                //     'instructions' => 'Paste the Causeway API token here.',
-                //     'required' => 1,
-                // ],
+                // Tabs: General & Advanced
+                [
+                    'key' => 'field_tab_general',
+                    'label' => 'General',
+                    'type' => 'tab',
+                    'placement' => 'left',
+                    'endpoint' => 0,
+                ],
                 [
                     'key' => 'field_causeway_api_url',
                     'label' => 'Causeway API URL',
@@ -514,12 +514,36 @@ function causeway_register_acf_fields() {
                     'required' => 1,
                 ],
                 [
+                    'key' => 'field_tab_advanced',
+                    'label' => 'Advanced',
+                    'type' => 'tab',
+                    'placement' => 'left',
+                    'endpoint' => 0,
+                ],
+                [
+                    'key' => 'field_is_headless',
+                    'label' => 'Is this for a headless environment?',
+                    'name' => 'is_headless',
+                    'type' => 'true_false',
+                    'ui' => 1,
+                    'message' => 'Enable if this site feeds a separate headless frontend',
+                ],
+                [
                     'key' => 'field_causeway_public_url',
                     'label' => 'Public Website URL',
                     'name' => 'causeway_public_url',
                     'type' => 'url',
                     'instructions' => 'Enter the public-facing website URL (e.g. https://cbisland.ca)',
                     'required' => 1,
+                    'conditional_logic' => [
+                        [
+                            [
+                                'field' => 'field_is_headless',
+                                'operator' => '==',
+                                'value' => '1',
+                            ],
+                        ],
+                    ],
                 ],
                 [
                     'key' => 'field_headless_api_secret',
@@ -528,6 +552,24 @@ function causeway_register_acf_fields() {
                     'type' => 'text',
                     'instructions' => 'Shared secret to authorize API calls from WordPress to the Angular site.',
                     'required' => 1,
+                    'conditional_logic' => [
+                        [
+                            [
+                                'field' => 'field_is_headless',
+                                'operator' => '==',
+                                'value' => '1',
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'key' => 'field_enable_import_logs',
+                    'label' => 'Enable Import Logs',
+                    'name' => 'enable_import_logs',
+                    'type' => 'true_false',
+                    'ui' => 1,
+                    'message' => 'Write importer debug logs to error_log',
+                    'default_value' => 0,
                 ],
             ],
             'location' => [
