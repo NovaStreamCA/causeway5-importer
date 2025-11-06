@@ -65,6 +65,20 @@ Notes:
 - Export cron: `causeway_cron_export_hook` (twice daily, headless ON only)
 - Housekeeping: `causeway_clear_cron_hook` (hourly)
 
+## Updates via GitHub (public repo)
+
+This plugin is configured to update directly from GitHub Releases.
+
+How to publish an update:
+
+1) Bump the Version in `causeway/causeway.php` (e.g., 1.1.0).
+2) Create a GitHub Release with tag `v1.1.0` (or `1.1.0`).
+
+Notes:
+- No asset zip required. The updater uses GitHub's zipball and automatically renames the extracted folder to `causeway/` so the update installs cleanly.
+- Tokens are NOT required when the repo is public.
+- WordPress checks periodically; visiting the Plugins screen triggers a check. You can also force-check via a management plugin or a transient clear.
+
 ## Security
 
 - The headless notification uses `x-causeway-secret` header. Ensure the public site validates it.

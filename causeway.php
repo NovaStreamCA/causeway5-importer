@@ -6,6 +6,7 @@
  * Description: Imports listings and taxonomies from Causeway API into WordPress with WPML and ACF integration.
  * Version: 1.0.0
  * Author: NovaStream
+ * Update URI: https://github.com/NovaStreamCA/causeway5-importer
  */
 
 if (!defined('ABSPATH')) {
@@ -30,6 +31,7 @@ require_once plugin_dir_path(__FILE__) . 'admin/acf-fields.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-causeway-importer.php';
 require_once plugin_dir_path(__FILE__) . 'admin/class-causeway-admin.php';
 require_once plugin_dir_path(__FILE__) . 'includes/causeway-exporter.php';
+require_once plugin_dir_path(__FILE__) . 'includes/github-updater.php';
 // TODO - enable this
 // require_once plugin_dir_path(__FILE__) . 'includes/disable-edit.php';
 
@@ -39,6 +41,10 @@ require_once plugin_dir_path(__FILE__) . 'includes/causeway-postobject-acf-field
 
 add_action('admin_init', function () {
     Causeway_Admin::init();
+    // Initialize GitHub updater (checks GitHub releases for updates)
+    if (class_exists('Causeway_GitHub_Updater')) {
+        new Causeway_GitHub_Updater(__FILE__, 'NovaStreamCA', 'causeway5-importer');
+    }
 });
 
 function causeway_register_listing_post_type()
