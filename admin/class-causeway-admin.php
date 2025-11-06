@@ -6,17 +6,31 @@ class Causeway_Admin {
     }
 
     public static function add_admin_page() {
+        // Import page (always visible)
         add_submenu_page(
             'edit.php?post_type=listing',       // Parent menu under Listings CPT
-            'Import Causeway',                 // Page title
-            'Import Causeway',                 // Menu title
+            'Import Causeway',                   // Page title
+            'Import Causeway',                   // Menu title
             'manage_options',                    // Capability
             'causeway-importer',                 // Menu slug
-            [self::class, 'render_page']         // Callback function
+            [self::class, 'render_import_page']  // Callback function
         );
+
+        // Export page (only if headless)
+        $is_headless = (bool) get_field('is_headless', 'option');
+        if ($is_headless) {
+            add_submenu_page(
+                'edit.php?post_type=listing',       // Parent menu under Listings CPT
+                'Export Causeway',                   // Page title
+                'Export Causeway',                   // Menu title
+                'manage_options',                    // Capability
+                'causeway-exporter',                 // Menu slug
+                [self::class, 'render_export_page']  // Callback function
+            );
+        }
     }
 
-    public static function render_page() {
+    public static function render_import_page() {
         error_log('show page');
         $is_headless = (bool) get_field('is_headless', 'option');
         if (isset($_GET['import_queued']) && $_GET['import_queued'] === '1') {
@@ -24,9 +38,6 @@ class Causeway_Admin {
         }
         if (isset($_GET['imported']) && $_GET['imported'] === '1') {
             echo '<div class="notice notice-success is-dismissible"><p>✅ Listings imported successfully.</p></div>';
-        }
-        if ($is_headless && isset($_GET['exported']) && $_GET['exported'] === '1') {
-            echo '<div class="notice notice-success is-dismissible"><p>✅ Listings exported successfully.</p></div>';
         }
         ?>
 <div class="wrap">
@@ -37,8 +48,20 @@ class Causeway_Admin {
         <input type="hidden" name="action" value="causeway_manual_import">
         <input type="submit" name="causeway_import_submit" class="button button-primary" value="Start Import">
     </form>
+</div>
+<?php
+    }
 
-    <?php if ($is_headless): ?>
+    public static function render_export_page() {
+        $is_headless = (bool) get_field('is_headless', 'option');
+        if (!$is_headless) {
+            wp_die('Export is disabled: this site is not configured as headless.');
+        }
+        if (isset($_GET['exported']) && $_GET['exported'] === '1') {
+            echo '<div class="notice notice-success is-dismissible"><p>✅ Listings exported successfully.</p></div>';
+        }
+        ?>
+<div class="wrap">
     <h1>Causeway Data Exporter <span style='font-size: 1.1rem;'>(Here to Public Website)</span></h1>
     <p>This tool will manually export all listings and taxonomy data from this website into the public headless site.</p>
     <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="margin-top: 20px;">
@@ -46,7 +69,6 @@ class Causeway_Admin {
         <input type="hidden" name="action" value="causeway_manual_export">
         <input type="submit" name="causeway_export_submit" class="button button-secondary" value="Start Export">
     </form>
-    <?php endif; ?>
 </div>
 <?php
     }
