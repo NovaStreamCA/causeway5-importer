@@ -1165,6 +1165,11 @@ class Causeway_Importer
         $public_url = get_field('causeway_public_url', 'option');
         $secret = get_field('headless_api_secret', 'option');
 
+        if (!$public_url || !$secret) {
+            error_log('Skipping export notification: Missing public URL or secret');
+            return;
+        }
+
         if ($public_url) {
             $endpoint = trailingslashit($public_url) . 'api/fetch-causeway';
 
