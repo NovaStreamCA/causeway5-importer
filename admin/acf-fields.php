@@ -562,6 +562,15 @@ function causeway_register_acf_fields() {
                         ],
                     ],
                 ],
+                [
+                    'key' => 'field_enable_import_logs',
+                    'label' => 'Enable Import Logs',
+                    'name' => 'enable_import_logs',
+                    'type' => 'true_false',
+                    'ui' => 1,
+                    'message' => 'Write importer debug logs to error_log',
+                    'default_value' => 0,
+                ],
             ],
             'location' => [
                 [
