@@ -63,8 +63,13 @@ class Causeway_Importer
         self::assign_community_areas_and_regions();
         self::assign_region_communities();
 
-        self::assign_area_slugs();
-        self::assign_category_slugs();
+        // Only assign slugs when in headless mode
+        if (get_field('is_headless', 'option')) {
+            self::assign_area_slugs();
+            self::assign_category_slugs();
+        } else {
+            error_log('Skipping area/category slug assignments: site not headless');
+        }
 
         self::import_listings();
 
