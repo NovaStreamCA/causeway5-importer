@@ -168,6 +168,7 @@ if (!class_exists('Causeway_GitHub_Updater')) {
 
             // If the extracted dir already matches our slug, nothing to do
             if (basename($source) === $this->slug) {
+                error_log('[Causeway Updater] Source already matches slug: ' . $source);
                 return $source;
             }
 
@@ -175,10 +176,21 @@ if (!class_exists('Causeway_GitHub_Updater')) {
 
             // Try to rename; suppress warnings and fall back to original on failure
             if (@rename($source, $desired)) {
+                error_log('[Causeway Updater] Renamed extracted directory from ' . basename($source) . ' to ' . $this->slug);
                 return $desired;
+            } else {
+                error_log('[Causeway Updater] Rename failed for ' . $source . ' -> ' . $desired . '. Attempting fallback copy.');
+                // Fallback: attempt recursive copy then remove original
+                if ($this->recursive_copy($source, $desired)) {
+                    error_log('[Causeway Updater] Fallback copy succeeded. Removing original temp dir.');
+                    $this->recursive_delete($source);
+                    return $desired;
+                } else {
+                    error_log('[Causeway Updater] Fallback copy failed; leaving original directory.');
+                }
             }
 
-            return $source;
+            return $source; // worst case WP will proceed; may show failure
         }
 
         private function build_headers(): array
@@ -188,6 +200,40 @@ if (!class_exists('Causeway_GitHub_Updater')) {
                 'Accept'     => 'application/vnd.github+json',
                 'User-Agent' => 'WordPress/' . get_bloginfo('version') . '; ' . home_url('/'),
             ];
+        }
+
+        private function recursive_copy($src, $dst): bool {
+            if (!is_dir($src)) return false;
+            if (!@mkdir($dst, 0755, true) && !is_dir($dst)) return false;
+            $items = scandir($src);
+            if ($items === false) return false;
+            foreach ($items as $item) {
+                if ($item === '.' || $item === '..') continue;
+                $from = $src . DIRECTORY_SEPARATOR . $item;
+                $to   = $dst . DIRECTORY_SEPARATOR . $item;
+                if (is_dir($from)) {
+                    if (!$this->recursive_copy($from, $to)) return false;
+                } else {
+                    if (!@copy($from, $to)) return false;
+                }
+            }
+            return true;
+        }
+
+        private function recursive_delete($dir): void {
+            if (!is_dir($dir)) return;
+            $items = scandir($dir);
+            if ($items === false) return;
+            foreach ($items as $item) {
+                if ($item === '.' || $item === '..') continue;
+                $path = $dir . DIRECTORY_SEPARATOR . $item;
+                if (is_dir($path)) {
+                    $this->recursive_delete($path);
+                } else {
+                    @unlink($path);
+                }
+            }
+            @rmdir($dir);
         }
 
         private function normalize_version(string $tag): string
