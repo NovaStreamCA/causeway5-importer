@@ -39,11 +39,20 @@ require_once plugin_dir_path(__FILE__) . 'includes/github-updater.php';
 require_once plugin_dir_path(__FILE__) . 'includes/causeway-taxonomy-acf-field.php';
 require_once plugin_dir_path(__FILE__) . 'includes/causeway-postobject-acf-field.php';
 
+// Admin-only init for admin UI
 add_action('admin_init', function () {
     Causeway_Admin::init();
-    // Initialize GitHub updater (checks GitHub releases for updates)
+});
+
+// Initialize GitHub updater early so checks also work via cron and non-admin contexts
+add_action('init', function () {
     if (class_exists('Causeway_GitHub_Updater')) {
-        new Causeway_GitHub_Updater(__FILE__, 'NovaStreamCA', 'causeway5-importer');
+        // Instantiate only once
+        static $done = false;
+        if (!$done) {
+            new Causeway_GitHub_Updater(__FILE__, 'NovaStreamCA', 'causeway5-importer');
+            $done = true;
+        }
     }
 });
 
