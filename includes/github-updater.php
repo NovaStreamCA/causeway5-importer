@@ -40,6 +40,8 @@ if (!class_exists('Causeway_GitHub_Updater')) {
             add_filter('plugins_api', [$this, 'plugins_api'], 10, 3);
             // Ensure extracted GitHub zip is renamed to the plugin directory name (avoids asset zip requirement)
             add_filter('upgrader_source_selection', [$this, 'maybe_rename_source_dir'], 10, 4);
+            // After files are moved into place, validate structure & log
+            add_filter('upgrader_post_install', [$this, 'post_install'], 10, 3);
         }
 
         public function check_for_update($transient)
@@ -138,7 +140,19 @@ if (!class_exists('Causeway_GitHub_Updater')) {
 
         private function get_download_url(array $release): string
         {
-            // Prefer zipball_url from API. This points to codeload.github.com
+            // Prefer a release asset named like the plugin slug to avoid renaming issues
+            if (!empty($release['assets']) && is_array($release['assets'])) {
+                foreach ($release['assets'] as $asset) {
+                    $name = $asset['name'] ?? '';
+                    $url  = $asset['browser_download_url'] ?? '';
+                    if ($name && $url && preg_match('/^' . preg_quote($this->slug, '/') . '.*\.zip$/i', $name)) {
+                        error_log('[Causeway Updater] Using release asset for update: ' . $name);
+                        return $url;
+                    }
+                }
+            }
+
+            // Fallback to zipball_url from API. This points to codeload.github.com
             $zip_url = $release['zipball_url'] ?? '';
             if (!$zip_url && isset($release['tag_name'])) {
                 $zip_url = sprintf('https://api.github.com/repos/%s/%s/zipball/%s', $this->repo_owner, $this->repo_name, $release['tag_name']);
@@ -173,24 +187,94 @@ if (!class_exists('Causeway_GitHub_Updater')) {
             }
 
             $desired = trailingslashit($remote_source) . $this->slug;
+            error_log('[Causeway Updater] Source selection: source=' . $source . ' remote_source=' . $remote_source . ' desired=' . $desired);
 
             // Try to rename; suppress warnings and fall back to original on failure
             if (@rename($source, $desired)) {
                 error_log('[Causeway Updater] Renamed extracted directory from ' . basename($source) . ' to ' . $this->slug);
-                return $desired;
+                // Ensure plugin main file exists after rename
+                $main = trailingslashit($desired) . basename($this->plugin_basename); // causeway.php
+                if (!file_exists($main)) {
+                    error_log('[Causeway Updater] WARNING: main plugin file not found after rename: ' . $main);
+                }
+                return trailingslashit($desired);
             } else {
                 error_log('[Causeway Updater] Rename failed for ' . $source . ' -> ' . $desired . '. Attempting fallback copy.');
                 // Fallback: attempt recursive copy then remove original
                 if ($this->recursive_copy($source, $desired)) {
                     error_log('[Causeway Updater] Fallback copy succeeded. Removing original temp dir.');
                     $this->recursive_delete($source);
-                    return $desired;
+                    $main = trailingslashit($desired) . basename($this->plugin_basename);
+                    if (!file_exists($main)) {
+                        error_log('[Causeway Updater] WARNING: main plugin file missing after fallback copy: ' . $main);
+                    }
+                    return trailingslashit($desired);
                 } else {
                     error_log('[Causeway Updater] Fallback copy failed; leaving original directory.');
                 }
             }
 
             return $source; // worst case WP will proceed; may show failure
+        }
+
+        /**
+         * Runs after WP moves the new version into the plugins directory.
+         * We verify that the destination contains the expected plugin file and log diagnostics.
+         *
+         * @param bool  $result       Install result.
+         * @param array $hook_extra   Extra args passed by upgrader (contains 'plugin').
+         * @param array $data         Array with destination / source etc.
+         * @return bool
+         */
+        public function post_install($result, $hook_extra, $data)
+        {
+            if (!$result) {
+                error_log('[Causeway Updater] post_install: result=false early');
+                return $result;
+            }
+            if (!isset($hook_extra['plugin']) || $hook_extra['plugin'] !== $this->plugin_basename) {
+                return $result; // Not our plugin
+            }
+            $dest = $data['destination'] ?? '';
+            $main = trailingslashit($dest) . basename($this->plugin_basename);
+            if (!file_exists($main)) {
+                // Look one level deeper in case of nested directory
+                $nested_main = '';
+                $entries = @scandir($dest);
+                if (is_array($entries)) {
+                    foreach ($entries as $e) {
+                        if ($e === '.' || $e === '..') continue;
+                        $candidate = trailingslashit($dest) . $e . '/' . basename($this->plugin_basename);
+                        if (file_exists($candidate)) {
+                            $nested_main = $candidate;
+                            break;
+                        }
+                    }
+                }
+                if ($nested_main) {
+                    error_log('[Causeway Updater] Detected nested plugin directory. Attempting to promote contents.');
+                    $nested_dir = dirname($nested_main);
+                    // Move files up a level
+                    $items = scandir($nested_dir);
+                    if (is_array($items)) {
+                        foreach ($items as $item) {
+                            if ($item === '.' || $item === '..') continue;
+                            @rename($nested_dir . '/' . $item, $dest . '/' . $item);
+                        }
+                    }
+                    @rmdir($nested_dir);
+                    if (!file_exists($main)) {
+                        error_log('[Causeway Updater] ERROR: main plugin file still missing after promoting nested directory: ' . $main);
+                    } else {
+                        error_log('[Causeway Updater] Successfully flattened nested directory.');
+                    }
+                } else {
+                    error_log('[Causeway Updater] ERROR: main plugin file not found in destination: ' . $main);
+                }
+            } else {
+                error_log('[Causeway Updater] post_install verification OK.');
+            }
+            return $result;
         }
 
         private function build_headers(): array
