@@ -41,7 +41,7 @@ class Causeway_Admin {
         }
         ?>
 <div class="wrap">
-    <h1>aa Causeway Data Importer <span style='font-size: 1.1rem;'>(Causeway to Here)</span></h1>
+    <h1>Causeway Data Importer <span style='font-size: 1.1rem;'>(Causeway to WordPress)</span></h1>
     <p>This tool will manually import all listings and taxonomy data from the external Causeway API into your WordPress site.</p>
     <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
         <?php wp_nonce_field('causeway_import_action', 'causeway_import_nonce'); ?>
