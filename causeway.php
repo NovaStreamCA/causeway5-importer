@@ -107,11 +107,23 @@ add_action('admin_post_causeway_manual_import', function () {
         wp_die('Invalid nonce');
     }
 
-    // ✅ This is where import runs
-    Causeway_Importer::import();
+    // Schedule a one-off cron event to run the import in the background ASAP
+    // Using the existing 'causeway_cron_hook' which calls Causeway_Importer::import()
+    if (!wp_next_scheduled('causeway_cron_hook')) {
+        // No import currently scheduled; schedule one to run immediately
+        wp_schedule_single_event(time() + 1, 'causeway_cron_hook');
+    } else {
+        // Even if a recurring import exists, still add a single event to run ASAP
+        wp_schedule_single_event(time() + 1, 'causeway_cron_hook');
+    }
 
-    // Redirect back to admin with success notice
-    wp_redirect(add_query_arg('imported', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
+    // Optionally try to spawn cron right away (best-effort, harmless if it fails)
+    if (function_exists('spawn_cron')) {
+        spawn_cron(time());
+    }
+
+    // Redirect back to admin with queued notice
+    wp_redirect(add_query_arg('import_queued', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
     exit;
 });
 
