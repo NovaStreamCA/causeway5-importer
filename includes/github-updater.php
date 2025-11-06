@@ -1,10 +1,9 @@
 <?php
 /**
- * Lightweight GitHub updater for the Causeway plugin.
+ * Lightweight GitHub updater for the Causeway plugin (public repo).
  *
  * - Checks GitHub releases for a newer version.
  * - Supplies update package and plugin info to WP.
- * - Supports private repos via optional token (constant CAUSEWAY_GITHUB_TOKEN or filter override).
  */
 
 if (!defined('ABSPATH')) {
@@ -22,7 +21,6 @@ if (!class_exists('Causeway_GitHub_Updater')) {
         private string $repo_name;
         private string $plugin_version;
         private string $repo_url;
-        private ?string $token;
 
         public function __construct(string $file, string $repo_owner, string $repo_name)
         {
@@ -32,7 +30,6 @@ if (!class_exists('Causeway_GitHub_Updater')) {
             $this->repo_owner      = $repo_owner;
             $this->repo_name       = $repo_name;
             $this->repo_url        = sprintf('https://github.com/%s/%s', $repo_owner, $repo_name);
-            $this->token           = $this->resolve_token();
 
             $plugin_data = get_file_data($this->file, [
                 'Version' => 'Version',
@@ -41,28 +38,8 @@ if (!class_exists('Causeway_GitHub_Updater')) {
 
             add_filter('pre_set_site_transient_update_plugins', [$this, 'check_for_update']);
             add_filter('plugins_api', [$this, 'plugins_api'], 10, 3);
-            add_filter('http_request_args', [$this, 'inject_github_auth_headers'], 10, 2);
             // Ensure extracted GitHub zip is renamed to the plugin directory name (avoids asset zip requirement)
             add_filter('upgrader_source_selection', [$this, 'maybe_rename_source_dir'], 10, 4);
-        }
-
-        private function resolve_token(): ?string
-        {
-            // Prefer constant, then environment variable, allow filter override as well
-            $token = defined('CAUSEWAY_GITHUB_TOKEN') ? constant('CAUSEWAY_GITHUB_TOKEN') : null;
-            if (!$token) {
-                $env = getenv('CAUSEWAY_GITHUB_TOKEN');
-                if (is_string($env) && $env !== '') {
-                    $token = $env;
-                }
-            }
-            /**
-             * Filter: causeway_github_token
-             *
-             * Return a personal access token to authenticate GitHub API requests (for private repos or higher rate limit).
-             */
-            $token = apply_filters('causeway_github_token', $token);
-            return $token ?: null;
         }
 
         public function check_for_update($transient)
@@ -206,29 +183,11 @@ if (!class_exists('Causeway_GitHub_Updater')) {
 
         private function build_headers(): array
         {
-            $headers = [
+            // Public repos don't need auth headers
+            return [
                 'Accept'     => 'application/vnd.github+json',
                 'User-Agent' => 'WordPress/' . get_bloginfo('version') . '; ' . home_url('/'),
             ];
-            if ($this->token) {
-                $headers['Authorization'] = 'token ' . $this->token;
-            }
-            return $headers;
-        }
-
-        public function inject_github_auth_headers($args, $url)
-        {
-            // Add auth header when WordPress downloads the package from GitHub or codeload.
-            if (!$this->token) {
-                return $args;
-            }
-            $host = wp_parse_url($url, PHP_URL_HOST);
-            if (in_array($host, ['api.github.com', 'github.com', 'codeload.github.com'], true)) {
-                $args['headers'] = isset($args['headers']) && is_array($args['headers']) ? $args['headers'] : [];
-                $args['headers']['Authorization'] = 'token ' . $this->token;
-                $args['headers']['User-Agent'] = 'WordPress/' . get_bloginfo('version') . '; ' . home_url('/');
-            }
-            return $args;
         }
 
         private function normalize_version(string $tag): string
