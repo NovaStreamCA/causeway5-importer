@@ -1151,6 +1151,10 @@ class Causeway_Importer
 
     public static function export_listings()
     {
+        if (!get_field('is_headless', 'option')) {
+            error_log('Skipping export notification: site not configured as headless');
+            return;
+        }
         error_log("Start Export");
         // Notify public site to re-fetch causeway data
         $public_url = get_field('causeway_public_url', 'option');

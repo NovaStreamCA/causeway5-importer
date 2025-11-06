@@ -120,6 +120,11 @@ add_action('admin_post_causeway_manual_export', function () {
         wp_die('Unauthorized or nonce check failed.');
     }
 
+    // Gate export logic for non-headless installations
+    if (!get_field('is_headless', 'option')) {
+        wp_die('Export is disabled: this site is not configured as headless.');
+    }
+
     if (class_exists('Causeway_Importer')) {
         Causeway_Importer::export_listings();
     }
@@ -133,8 +138,16 @@ register_activation_hook(__FILE__, function () {
     if (!wp_next_scheduled('causeway_cron_hook')) {
         wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
     }
-    if (!wp_next_scheduled('causeway_cron_export_hook')) {
-        wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
+    if (get_field('is_headless', 'option')) {
+        if (!wp_next_scheduled('causeway_cron_export_hook')) {
+            wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
+        }
+    } else {
+        // Ensure export cron is not scheduled
+        $ts = wp_next_scheduled('causeway_cron_export_hook');
+        if ($ts) {
+            wp_unschedule_event($ts, 'causeway_cron_export_hook');
+        }
     }
     if (!wp_next_scheduled('causeway_clear_cron_hook')) {
         wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
@@ -146,8 +159,10 @@ add_action('init', function () {
     if (!wp_next_scheduled('causeway_cron_hook')) {
         wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
     }
-    if (!wp_next_scheduled('causeway_cron_export_hook')) {
-        wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
+    if (get_field('is_headless', 'option')) {
+        if (!wp_next_scheduled('causeway_cron_export_hook')) {
+            wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
+        }
     }
     if (!wp_next_scheduled('causeway_clear_cron_hook')) {
         wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
@@ -181,6 +196,10 @@ function run_causeway_import_export()
 
 function run_causeway_export()
 {
+    if (!get_field('is_headless', 'option')) {
+        error_log('Skipping Causeway export via cron: not headless');
+        return;
+    }
     error_log('🕑 Running Causeway export via cron @ ' . date('Y-m-d H:i:s'));
     if (class_exists('Causeway_Importer')) {
         Causeway_Importer::export();

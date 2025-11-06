@@ -8,6 +8,10 @@ Causeway Data Fetching
 
 add_action('init', function () {
     add_action('rest_api_init', function () {
+        // Only expose exporter endpoints for headless sites
+        if (!get_field('is_headless', 'option')) {
+            return;
+        }
         register_rest_route('causeway/v1', '/listings', [
             'methods'  => 'GET',
             'callback' => 'get_listings',

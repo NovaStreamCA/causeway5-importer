@@ -506,6 +506,14 @@ function causeway_register_acf_fields() {
                 //     'required' => 1,
                 // ],
                 [
+                    'key' => 'field_is_headless',
+                    'label' => 'Is this for a headless environment?',
+                    'name' => 'is_headless',
+                    'type' => 'true_false',
+                    'ui' => 1,
+                    'message' => 'Enable if this site feeds a separate headless frontend',
+                ],
+                [
                     'key' => 'field_causeway_api_url',
                     'label' => 'Causeway API URL',
                     'name' => 'causeway_api_url',
@@ -520,6 +528,15 @@ function causeway_register_acf_fields() {
                     'type' => 'url',
                     'instructions' => 'Enter the public-facing website URL (e.g. https://cbisland.ca)',
                     'required' => 1,
+                    'conditional_logic' => [
+                        [
+                            [
+                                'field' => 'field_is_headless',
+                                'operator' => '==',
+                                'value' => '1',
+                            ],
+                        ],
+                    ],
                 ],
                 [
                     'key' => 'field_headless_api_secret',
@@ -528,6 +545,15 @@ function causeway_register_acf_fields() {
                     'type' => 'text',
                     'instructions' => 'Shared secret to authorize API calls from WordPress to the Angular site.',
                     'required' => 1,
+                    'conditional_logic' => [
+                        [
+                            [
+                                'field' => 'field_is_headless',
+                                'operator' => '==',
+                                'value' => '1',
+                            ],
+                        ],
+                    ],
                 ],
             ],
             'location' => [
