@@ -497,21 +497,13 @@ function causeway_register_acf_fields() {
             'key' => 'group_causeway_settings',
             'title' => 'Causeway Import Settings',
             'fields' => [
-                // [
-                //     'key' => 'field_causeway_token',
-                //     'label' => 'API Token',
-                //     'name' => 'causeway_api_token',
-                //     'type' => 'text',
-                //     'instructions' => 'Paste the Causeway API token here.',
-                //     'required' => 1,
-                // ],
+                // Tabs: General & Advanced
                 [
-                    'key' => 'field_is_headless',
-                    'label' => 'Is this for a headless environment?',
-                    'name' => 'is_headless',
-                    'type' => 'true_false',
-                    'ui' => 1,
-                    'message' => 'Enable if this site feeds a separate headless frontend',
+                    'key' => 'field_tab_general',
+                    'label' => 'General',
+                    'type' => 'tab',
+                    'placement' => 'left',
+                    'endpoint' => 0,
                 ],
                 [
                     'key' => 'field_causeway_api_url',
@@ -520,6 +512,21 @@ function causeway_register_acf_fields() {
                     'type' => 'url',
                     'instructions' => 'Enter the API URL (e.g. https://api-causeway5.novastream.dev/)',
                     'required' => 1,
+                ],
+                [
+                    'key' => 'field_tab_advanced',
+                    'label' => 'Advanced',
+                    'type' => 'tab',
+                    'placement' => 'left',
+                    'endpoint' => 0,
+                ],
+                [
+                    'key' => 'field_is_headless',
+                    'label' => 'Is this for a headless environment?',
+                    'name' => 'is_headless',
+                    'type' => 'true_false',
+                    'ui' => 1,
+                    'message' => 'Enable if this site feeds a separate headless frontend',
                 ],
                 [
                     'key' => 'field_causeway_public_url',
