@@ -3,6 +3,7 @@
 class Causeway_Admin {
     public static function init() {
         add_action('admin_menu', [self::class, 'add_admin_page']);
+        add_action('admin_init', [self::class, 'maybe_force_update_check']);
     }
 
     public static function add_admin_page() {
@@ -28,6 +29,16 @@ class Causeway_Admin {
                 [self::class, 'render_export_page']  // Callback function
             );
         }
+
+        // Plugin Updates utility page (always visible)
+        add_submenu_page(
+            'edit.php?post_type=listing',
+            'Plugin Updates',
+            'Plugin Updates',
+            'manage_options',
+            'causeway-updates',
+            [self::class, 'render_updates_page']
+        );
     }
 
     public static function render_import_page() {
@@ -71,6 +82,90 @@ class Causeway_Admin {
     </form>
 </div>
 <?php
+    }
+
+    /**
+     * Render the Plugin Updates utility page.
+     */
+    public static function render_updates_page() {
+        if (!current_user_can('manage_options')) {
+            wp_die('Unauthorized');
+        }
+
+        $plugin_file = dirname(__DIR__) . '/causeway.php';
+        $plugin_data = get_file_data($plugin_file, [ 'Version' => 'Version' ]);
+        $current_version = $plugin_data['Version'] ?? 'unknown';
+
+        $cached_release = get_site_transient('causeway_github_latest_release');
+        $cached_tag = is_array($cached_release) ? ($cached_release['tag_name'] ?? '') : '';
+
+        if (isset($_GET['force_update']) && $_GET['force_update'] === '1') {
+            echo '<div class="notice notice-info is-dismissible"><p>🔄 Update cache cleared and rechecked. If a new release exists it should now appear on the Plugins page.</p></div>';
+        }
+        ?>
+<div class="wrap">
+    <h1>Plugin Updates</h1>
+    <p>Manage update checks for the Causeway Listings Importer plugin.</p>
+    <table class="widefat" style="max-width:600px;margin-top:15px;">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Current Installed Version</td>
+                <td><?php echo esc_html($current_version); ?></td>
+            </tr>
+            <tr>
+                <td>Cached Latest GitHub Tag</td>
+                <td><?php echo esc_html($cached_tag ?: '—'); ?></td>
+            </tr>
+            <tr>
+                <td>Cache TTL</td>
+                <td>30 minutes (release & plugin update transients)</td>
+            </tr>
+        </tbody>
+    </table>
+    <h2 style="margin-top:30px;">Force Update Check</h2>
+    <p>Clears cached release + plugin update data and triggers an immediate refresh.</p>
+    <form method="post" action="<?php echo esc_url(admin_url('edit.php?post_type=listing&page=causeway-updates')); ?>" style="margin-top:10px;">
+        <?php wp_nonce_field('causeway_force_update_action', 'causeway_force_update_nonce'); ?>
+        <input type="hidden" name="causeway_force_update" value="1" />
+        <button type="submit" class="button button-primary">Force Update Check</button>
+    </form>
+    <p style="margin-top:15px; font-size:0.9rem; color:#555;">Tip: The Plugins page also refreshes automatically on its own schedule. This button is only needed to bypass the
+        30‑minute cache window.</p>
+</div>
+<?php
+    }
+
+    /**
+     * Handle the force update request: clear our release transient & core plugin update transient,
+     * then trigger an update check so the Plugins page reflects the latest version immediately.
+     */
+    public static function maybe_force_update_check() {
+        if (!is_admin()) return;
+        if (!current_user_can('manage_options')) return;
+        if (!isset($_POST['causeway_force_update'])) return;
+        if (!isset($_POST['causeway_force_update_nonce']) || !wp_verify_nonce($_POST['causeway_force_update_nonce'], 'causeway_force_update_action')) return;
+
+        // Delete our cached GitHub release data
+        delete_site_transient('causeway_github_latest_release');
+
+        // Clear the core plugin update data so WP refetches
+        delete_site_transient('update_plugins');
+
+        // Prime a fresh check
+        if (!function_exists('wp_update_plugins')) {
+            require_once ABSPATH . 'wp-includes/update.php';
+        }
+        wp_update_plugins();
+
+        // Redirect to avoid resubmission; add notice flag
+        wp_redirect(add_query_arg('force_update', '1', admin_url('edit.php?post_type=listing&page=causeway-updates')));
+        exit;
     }
 } 
 
