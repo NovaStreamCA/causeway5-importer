@@ -875,6 +875,9 @@ class Causeway_Importer
             }
             update_field('attachments', $attachments, $post_id);
 
+            // Set featured image based on attachments (Primary first, else first)
+            self::maybe_set_featured_image($post_id, $attachments, $post_title);
+
             // Dates Repeater
             $dates = [];
             foreach ($item['dates'] ?? [] as $date) {
@@ -1289,5 +1292,101 @@ class Causeway_Importer
             $message = print_r($message, true);
         }
         error_log('[Causeway] ' . $message);
+    }
+
+    /**
+     * Set the post featured image using the first attachment with category 'Primary' (case-insensitive),
+     * falling back to the first attachment. Downloads the image to the media library if needed.
+     * Caches by original URL in post meta to avoid re-downloading when unchanged.
+     */
+    private static function maybe_set_featured_image(int $post_id, array $attachments, string $post_title = ''): void
+    {
+        if (empty($attachments)) {
+            return;
+        }
+
+        // Pick candidate URL
+        $primary = null;
+        foreach ($attachments as $att) {
+            if (!empty($att['url']) && isset($att['category']) && strcasecmp(trim($att['category']), 'Primary') === 0) {
+                $primary = $att;
+                break;
+            }
+        }
+        $selected = $primary ?: (isset($attachments[0]) ? $attachments[0] : null);
+        if (!$selected || empty($selected['url'])) {
+            return;
+        }
+
+        $url = esc_url_raw($selected['url']);
+        $current_source = get_post_meta($post_id, '_causeway_featured_image_source', true);
+        $current_thumb  = get_post_thumbnail_id($post_id);
+
+        // If already set with same source, skip.
+        if ($current_thumb && $current_source === $url) {
+            return;
+        }
+
+        $desc = $post_title ?: 'Listing image';
+        $attachment_id = self::sideload_attachment($url, $post_id, $desc);
+        if (is_wp_error($attachment_id)) {
+            self::log('❌ Failed to sideload featured image for post ' . $post_id . ' (' . $attachment_id->get_error_message() . ') URL: ' . $url);
+            return;
+        }
+
+        // Set alt text if provided and not already set
+        if (!empty($selected['alt'])) {
+            $existing_alt = get_post_meta($attachment_id, '_wp_attachment_image_alt', true);
+            if (!$existing_alt) {
+                update_post_meta($attachment_id, '_wp_attachment_image_alt', wp_strip_all_tags($selected['alt']));
+            }
+        }
+
+        set_post_thumbnail($post_id, $attachment_id);
+        update_post_meta($post_id, '_causeway_featured_image_source', $url);
+        self::log('🖼️ Set featured image for listing ' . $post_id . ' from URL: ' . $url . ' (attachment ' . $attachment_id . ')');
+    }
+
+    /**
+     * Robust sideloader that supports modern formats (e.g., AVIF) and avoids
+     * the legacy extension regex in media_sideload_image(). Returns attachment ID or WP_Error.
+     */
+    private static function sideload_attachment(string $url, int $post_id, string $desc = '')
+    {
+        // Core media helpers
+        if (!function_exists('media_handle_sideload')) {
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+        }
+
+        // Fetch to a temp file
+        $tmp = download_url($url, 300);
+        if (is_wp_error($tmp)) {
+            return $tmp;
+        }
+
+        // Derive a sane filename from the path (ignore query string)
+        $path = parse_url($url, PHP_URL_PATH);
+        $basename = $path ? basename($path) : 'image';
+        // Fallback if somehow no extension
+        if (strpos($basename, '.') === false) {
+            $basename .= '.jpg';
+        }
+
+        $file_array = [
+            'name'     => $basename,
+            'tmp_name' => $tmp,
+        ];
+
+        // Defer to WP to move file into uploads and create attachment
+        $attach_id = media_handle_sideload($file_array, $post_id, $desc);
+
+        if (is_wp_error($attach_id)) {
+            @unlink($tmp);
+            return $attach_id;
+        }
+
+        return $attach_id;
     }
 }

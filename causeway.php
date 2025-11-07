@@ -113,6 +113,15 @@ function causeway_register_taxonomies()
 }
 add_action('init', 'causeway_register_taxonomies');
 
+// Allow modern image formats to be uploaded/sideloaded (AVIF/HEIC/HEIF)
+add_filter('upload_mimes', function ($mimes) {
+    $mimes['avif'] = 'image/avif';
+    // Optional extras if your content may include these
+    $mimes['heic'] = 'image/heic';
+    $mimes['heif'] = 'image/heif';
+    return $mimes;
+});
+
 add_action('admin_post_causeway_manual_import', function () {
     if (!current_user_can('manage_options')) {
         wp_die('Unauthorized');
