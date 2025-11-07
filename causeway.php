@@ -188,6 +188,15 @@ register_activation_hook(__FILE__, function () {
     if (!wp_next_scheduled('causeway_clear_cron_hook')) {
         wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
     }
+
+    // Attempt an immediate taxonomy-only import on fresh activation (best-effort)
+    if (class_exists('Causeway_Importer')) {
+        try {
+            Causeway_Importer::import_taxonomies_only();
+        } catch (Throwable $e) {
+            error_log('[Causeway] Taxonomy-only import on activation failed: ' . $e->getMessage());
+        }
+    }
 });
 
 // Safety fallback in case plugin was already active

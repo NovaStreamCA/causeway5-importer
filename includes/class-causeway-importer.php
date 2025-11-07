@@ -85,6 +85,63 @@ class Causeway_Importer
         self::export_listings();
     }
 
+    // Run only taxonomy imports (types, categories, amenities, seasons, campaigns, areas/communities/regions/counties)
+    public static function import_taxonomies_only(): void
+    {
+        self::log('start taxonomy-only import');
+
+        $baseURL = get_field('causeway_api_url', 'option');
+        if ($baseURL) {
+            self::$baseURL = $baseURL;
+        }
+
+        /* FORCE ENGLISH */
+        $orig_lang = apply_filters('wpml_current_language', null);
+        do_action('wpml_switch_language', 'en');
+
+        define('CAUSEWAY_IMPORTING', true);
+        self::$start = microtime(true);
+
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+        if (function_exists('wp_suspend_cache_addition')) {
+            wp_suspend_cache_addition(true);
+        }
+        wp_defer_term_counting(true);
+
+        // Preload
+        self::$areas = self::fetch_remote('areas');
+        self::$communities = self::fetch_remote('communities');
+        self::$regions = self::fetch_remote('regions');
+        self::$counties = self::fetch_remote('counties');
+
+        // Core taxonomies
+        self::import_types();
+        self::import_categories();
+        self::import_amenities();
+        self::import_campaigns();
+        self::import_seasons();
+        self::import_terms('listing-counties', self::$counties);
+        self::import_terms('listing-areas', self::$areas);
+        self::import_terms('listing-communities', self::$communities);
+        self::import_terms('listing-regions', self::$regions);
+
+        self::assign_area_communities();
+        self::assign_community_areas_and_regions();
+        self::assign_region_communities();
+
+        if (get_field('is_headless', 'option')) {
+            self::assign_area_slugs();
+            self::assign_category_slugs();
+        }
+
+        self::log('✅ Taxonomy import completed @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+
+        wp_defer_term_counting(false);
+        wp_suspend_cache_addition(false);
+    }
+
     private static function fetch_remote($endpoint)
     {
         $response = wp_remote_get(
@@ -712,7 +769,43 @@ class Causeway_Importer
         self::log('Importing listings..');
         $imported_ids = [];
 
-        $response = wp_remote_get(self::$baseURL . 'listings?search=listings.status&compare==&value=Published', [
+        // Build base endpoint with status filter
+        $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
+
+        // Apply optional filters (Areas / Communities) from settings page
+        $area_ids = get_field('import_filter_areas', 'option') ?: [];
+        $community_ids = get_field('import_filter_communities', 'option') ?: [];
+
+        // Convert WP term IDs -> Causeway IDs (stored as term meta causeway_id)
+        $area_causeway_ids = [];
+        foreach ((array)$area_ids as $tid) {
+            $cid = (int) get_field('causeway_id', 'listing-areas_' . $tid);
+            if ($cid) $area_causeway_ids[] = $cid;
+        }
+        $community_causeway_ids = [];
+        foreach ((array)$community_ids as $tid) {
+            $cid = (int) get_field('causeway_id', 'listing-communities_' . $tid);
+            if ($cid) $community_causeway_ids[] = $cid;
+        }
+
+        // If filters selected, append repeated search/compare/value triples as required by API
+        foreach ((array)$community_causeway_ids as $cid) {
+            $endpoint .= '&search=locations.community_id&compare==&value=' . rawurlencode((string)$cid);
+        }
+        foreach ((array)$area_causeway_ids as $aid) {
+            // API expects communities_areas.area_id per spec
+            $endpoint .= '&search=communities_areas.area_id&compare==&value=' . rawurlencode((string)$aid);
+        }
+
+        // Allow last-minute customization via filter
+        $endpoint = apply_filters('causeway_import_listings_endpoint', $endpoint, [
+            'areas' => $area_causeway_ids,
+            'communities' => $community_causeway_ids,
+        ]);
+
+        self::log('Listings endpoint: ' . $endpoint);
+
+        $response = wp_remote_get($endpoint, [
             'timeout' => 1200,
         ]);
 
@@ -731,6 +824,31 @@ class Causeway_Importer
             self::log('❌ Invalid listings data');
             // self::log($listings);
             return;
+        }
+
+        // Safety net: if filters were provided, enforce client-side filtering as well
+        if (!empty($area_causeway_ids) || !empty($community_causeway_ids)) {
+            $pre_count = count($listings);
+            $listings = array_values(array_filter($listings, function ($item) use ($area_causeway_ids, $community_causeway_ids) {
+                // No filters -> accept all
+                if (empty($area_causeway_ids) && empty($community_causeway_ids)) return true;
+
+                foreach ((array)($item['locations'] ?? []) as $loc) {
+                    // Community match
+                    $comm_id = isset($loc['community']['id']) ? (int)$loc['community']['id'] : 0;
+                    if ($comm_id && in_array($comm_id, $community_causeway_ids, true)) return true;
+
+                    // Area match under the community areas array
+                    foreach ((array)($loc['community']['areas'] ?? []) as $ar) {
+                        $aid = isset($ar['id']) ? (int)$ar['id'] : 0;
+                        if ($aid && in_array($aid, $area_causeway_ids, true)) return true;
+                    }
+                }
+
+                return false; // no match found
+            }));
+            $post_count = count($listings);
+            self::log("🔎 Applied filters: areas=" . json_encode($area_causeway_ids) . ", communities=" . json_encode($community_causeway_ids) . " | kept {$post_count}/{$pre_count}");
         }
 
         $listings_count = is_array($listings) ? count($listings) : 0;
