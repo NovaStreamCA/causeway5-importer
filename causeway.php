@@ -78,6 +78,8 @@ function causeway_register_listing_post_type()
             'name_admin_bar' => __('Causeway'),
         ],
         'public' => true,
+        'publicly_queryable' => true,
+        'query_var' => 'listing',
         'has_archive' => true,
         'show_in_rest' => true,
         'supports' => ['title', 'editor', 'excerpt', 'thumbnail'],
@@ -174,6 +176,9 @@ add_action('admin_post_causeway_manual_export', function () {
 
 // Register CRON on plugin activation
 register_activation_hook(__FILE__, function () {
+    // Ensure registration happens before flush so rules exist
+    causeway_register_listing_post_type();
+    causeway_register_taxonomies();
     if (!wp_next_scheduled('causeway_cron_hook')) {
         wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
     }
@@ -200,6 +205,9 @@ register_activation_hook(__FILE__, function () {
             error_log('[Causeway] Taxonomy-only import on activation failed: ' . $e->getMessage());
         }
     }
+
+    // Flush rewrites so /listing/* and archive work immediately
+    flush_rewrite_rules();
 });
 
 // Safety fallback in case plugin was already active
@@ -217,6 +225,24 @@ add_action('init', function () {
     }
 });
 
+// Last-resort: auto-flush rewrites once if listing rules absent (helps when code updated without reactivation)
+add_action('init', function () {
+    $rules = get_option('rewrite_rules');
+    if (!is_array($rules)) { return; }
+    $has_listing = false;
+    foreach ($rules as $regex => $query) {
+        if (strpos($regex, 'listing/') !== false) { $has_listing = true; break; }
+    }
+    if (!$has_listing && !get_transient('causeway_rewrite_autoflush')) {
+        // Ensure CPT/tax are registered before flush
+        causeway_register_listing_post_type();
+        causeway_register_taxonomies();
+        flush_rewrite_rules(false);
+        set_transient('causeway_rewrite_autoflush', 1, 300);
+        error_log('[Causeway] Auto-flushed rewrite rules for listing CPT');
+    }
+}, 20);
+
 // Deactivate CRON on plugin deactivation
 register_deactivation_hook(__FILE__, function () {
     $timestamp = wp_next_scheduled('causeway_cron_hook');
@@ -228,6 +254,8 @@ register_deactivation_hook(__FILE__, function () {
     if ($timestamp2) {
         wp_unschedule_event($timestamp2, 'causeway_cron_export_hook');
     }
+
+    flush_rewrite_rules();
 });
 
 add_action('causeway_cron_hook', 'run_causeway_import_export');
@@ -307,4 +335,19 @@ add_filter('single_template', function ($single) {
         }
     }
     return $single;
+});
+
+// Provide an archive template fallback for listing archive
+add_filter('archive_template', function ($archive) {
+    if (is_post_type_archive('listing')) {
+        $theme_template = locate_template(['archive-listing.php']);
+        if ($theme_template) {
+            return $theme_template;
+        }
+        $plugin_template = plugin_dir_path(__FILE__) . 'templates/archive-listing.php';
+        if (file_exists($plugin_template)) {
+            return $plugin_template;
+        }
+    }
+    return $archive;
 });
