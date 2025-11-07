@@ -54,11 +54,17 @@ class Causeway_ACF_Blocks {
                         'max' => 6,
                     ],
                     [
-                        'key' => 'field_causeway_listings_type',
-                        'label' => 'Listing Type (slug)',
-                        'name' => 'type',
-                        'type' => 'text',
-                        'instructions' => 'Optional single listing-type slug to filter.',
+                        'key' => 'field_causeway_listings_types_multi',
+                        'label' => 'Listing Types',
+                        'name' => 'types',
+                        'type' => 'taxonomy',
+                        'taxonomy' => 'listing-type',
+                        'field_type' => 'multi_select',
+                        'add_term' => 0,
+                        'save_terms' => 0,
+                        'load_terms' => 0,
+                        'return_format' => 'id',
+                        'instructions' => 'Select one or more listing types to filter. Overrides single slug above if used.',
                     ],
                     [
                         'key' => 'field_causeway_listings_orderby',
@@ -106,12 +112,21 @@ class Causeway_ACF_Blocks {
     }
 
     public static function render_block($block, $content = '', $is_preview = false, $post_id = 0) {
-        $count     = get_field('count') ?: 6;
-        $columns   = get_field('columns') ?: 3;
-        $type      = get_field('type') ?: '';
-        $orderby   = get_field('orderby') ?: 'date';
-        $order     = get_field('order') ?: 'DESC';
-        $pagination = (bool) get_field('show_pagination');
+        $count       = get_field('count') ?: 6;
+        $columns     = get_field('columns') ?: 3;
+        $type        = get_field('type') ?: '';
+        $types_multi = get_field('types');
+        if (is_array($types_multi) && !empty($types_multi)) {
+            $slugs = [];
+            foreach ($types_multi as $term_id) {
+                $term = get_term($term_id, 'listing-type');
+                if ($term && !is_wp_error($term)) { $slugs[] = $term->slug; }
+            }
+            if (!empty($slugs)) { $type = $slugs; }
+        }
+        $orderby     = get_field('orderby') ?: 'date';
+        $order       = get_field('order') ?: 'DESC';
+        $pagination  = (bool) get_field('show_pagination');
 
         $html = Causeway_Listings_Loop::render([
             'count' => $count,
