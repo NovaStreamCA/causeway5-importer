@@ -292,3 +292,19 @@ if (defined('WP_CLI') && WP_CLI) {
 
     WP_CLI::add_command('causeway', 'Causeway_CLI_Command');
 }
+
+// Provide a fallback single template for the 'listing' post type from this plugin
+add_filter('single_template', function ($single) {
+    if (is_singular('listing')) {
+        // Allow themes to override by providing single-listing.php
+        $theme_template = locate_template(['single-listing.php']);
+        if ($theme_template) {
+            return $theme_template;
+        }
+        $plugin_template = plugin_dir_path(__FILE__) . 'templates/single-listing.php';
+        if (file_exists($plugin_template)) {
+            return $plugin_template;
+        }
+    }
+    return $single;
+});
