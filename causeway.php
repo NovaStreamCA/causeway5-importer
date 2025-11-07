@@ -351,3 +351,17 @@ add_filter('archive_template', function ($archive) {
     }
     return $archive;
 });
+
+// Enqueue frontend styles conditionally
+add_action('wp_enqueue_scripts', function () {
+    $is_listing_screen = is_singular('listing') || is_post_type_archive('listing');
+    // Heuristic: listing grid usage via block/shortcode – always enqueue on singular pages to avoid FOUC
+    if ($is_listing_screen || has_block('acf/causeway-listings-grid') || is_page()) {
+        wp_enqueue_style('causeway-listings', plugin_dir_url(__FILE__) . 'assets/css/causeway.css', [], '1.0.0');
+    }
+});
+
+// Editor styles (block editor) for listing block previews
+add_action('enqueue_block_editor_assets', function () {
+    wp_enqueue_style('causeway-listings-editor', plugin_dir_url(__FILE__) . 'assets/css/causeway.css', [], '1.0.0');
+});

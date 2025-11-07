@@ -46,29 +46,14 @@ class Causeway_Listings_Loop {
             $cols = (int)($args['columns'] ?? 3);
             if ($cols < 1) { $cols = 1; }
             if ($cols > 6) { $cols = 6; }
-            echo '<div class="causeway-listings-grid" style="display:grid;gap:24px;grid-template-columns:repeat(' . esc_attr($cols) . ',1fr);">';
+            $cols_class = 'cols-' . $cols;
+            echo '<div class="causeway-listings-grid ' . esc_attr($cols_class) . '">';
             while ($q->have_posts()) { $q->the_post();
-                echo '<article class="listing-card" style="border:1px solid #e5e5e5;border-radius:8px;overflow:hidden;background:#fff;">';
-                echo '<a href="' . esc_url(get_permalink()) . '" class="thumb" style="display:block;aspect-ratio:16/9;background:#f5f5f5;overflow:hidden;">';
-                if (has_post_thumbnail()) {
-                    the_post_thumbnail('medium_large', ['style' => 'width:100%;height:100%;object-fit:cover;display:block;']);
-                }
-                echo '</a>';
-                echo '<div class="body" style="padding:16px;">';
-                echo '<h3 class="title" style="margin:0 0 8px;font-size:1.1rem;"><a style="text-decoration:none;color:inherit;" href="' . esc_url(get_permalink()) . '">' . esc_html(get_the_title()) . '</a></h3>';
-                $excerpt = get_the_excerpt();
-                if (!$excerpt) { $excerpt = wp_trim_words(wp_strip_all_tags(get_the_content()), 25); }
-                echo '<p class="excerpt" style="margin:0 0 10px;color:#555;font-size:0.9rem;">' . esc_html(wp_trim_words($excerpt, 25)) . '</p>';
-                $types = get_the_terms(get_the_ID(), 'listing-type');
-                if (!is_wp_error($types) && !empty($types)) {
-                    echo '<div class="type" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px;color:#777;">' . esc_html($types[0]->name) . '</div>';
-                }
-                echo '</div>';
-                echo '</article>';
+                self::include_template_part('listing-card.php');
             }
             echo '</div>';
             if (!empty($args['show_pagination'])) {
-                echo '<div class="causeway-pagination" style="margin-top:32px;">';
+                echo '<div class="causeway-pagination">';
                 // Basic pagination (doesn't persist block attrs). For block context consider JS later.
                 echo paginate_links([
                     'total'   => $q->max_num_pages,
@@ -81,5 +66,30 @@ class Causeway_Listings_Loop {
             echo '<p class="no-listings">' . esc_html__('No listings found.', 'causeway') . '</p>';
         }
         return trim(ob_get_clean());
+    }
+
+    /**
+     * Locate and include a template part for listings. Theme overrides are supported.
+     * @param string $basename e.g., 'listing-card.php'
+     * @param array $args variables to expose to the template
+     */
+    private static function include_template_part(string $basename, array $args = []): void {
+        // Allow themes to override under common paths
+        $candidates = [
+            'causeway/' . $basename,
+            $basename,
+            'template-parts/causeway/' . $basename,
+        ];
+        $template = locate_template($candidates);
+        if (!$template) {
+            // Fallback to plugin template
+            $template = dirname(__DIR__) . '/templates/' . $basename;
+        }
+        if (!empty($args)) {
+            extract($args, EXTR_SKIP);
+        }
+        if (file_exists($template)) {
+            include $template;
+        }
     }
 }
