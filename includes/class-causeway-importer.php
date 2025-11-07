@@ -1286,6 +1286,30 @@ class Causeway_Importer
 
             // Delete if no causeway_id OR causeway_id not in imported_ids
             if (is_null($causeway_id) || !isset($imported_ids_map[$causeway_id])) {
+                // Remove featured image attachment if safe to do so
+                $thumb_id = get_post_thumbnail_id($post_id);
+                if ($thumb_id) {
+                    // Allow override via filter
+                    $should_delete = apply_filters('causeway_delete_listing_featured_image', true, $post_id, $thumb_id);
+                    if ($should_delete) {
+                        // Check if any other post uses this as its thumbnail
+                        $others = get_posts([
+                            'post_type'   => 'any',
+                            'meta_key'    => '_thumbnail_id',
+                            'meta_value'  => $thumb_id,
+                            'fields'      => 'ids',
+                            'numberposts' => 2, // we only need to know if there's more than 1 total
+                            'post_status' => 'any',
+                        ]);
+                        // $others includes this post; if count <= 1, safe to remove
+                        if (count($others) <= 1) {
+                            wp_delete_attachment($thumb_id, true);
+                            self::log("🧽 Deleted featured image attachment {$thumb_id} for stale listing ID: {$post_id}");
+                        } else {
+                            self::log("ℹ️ Skipped deleting attachment {$thumb_id}: used by other posts");
+                        }
+                    }
+                }
                 wp_delete_post($post_id, true);
                 $reason = is_null($causeway_id) ? 'no Causeway ID' : "stale Causeway ID: $causeway_id";
                 self::log("🗑️ Deleted listing ID: $post_id ($reason)");
