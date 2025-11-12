@@ -1386,12 +1386,9 @@ class Causeway_Importer
             $duration = $end->diffInMinutes($start);
 
             if (!empty($entry['rrule'])) {
-                // Patch DTSTART / UNTIL to this year
-                $rr = preg_replace(
-                    ['/DTSTART:(\d{4})(\d{4}T\d{6}Z)/', '/UNTIL=(\d{4})(\d{4}T\d{6}Z)/'],
-                    ["DTSTART:{$year}\$2",              "UNTIL={$year}\$2"],
-                    $entry['rrule']
-                );
+                // Use RRULE as-is. Do NOT rewrite UNTIL, as that can make UNTIL < DTSTART and yield no occurrences.
+                // We still constrain results to the current calendar year via getOccurrencesBetween().
+                $rr = $entry['rrule'];
                 foreach ((new RRule($rr))->getOccurrencesBetween(
                     Carbon::create($year,1,1,0,0,0,$tz),
                     Carbon::create($year,12,31,23,59,59,$tz)
