@@ -223,6 +223,32 @@ add_action('admin_post_causeway_manual_export', function () {
     exit;
 });
 
+// Admin-post: force reset import status (in case of stuck state)
+add_action('admin_post_causeway_manual_import_reset', function () {
+    if (!current_user_can('manage_options')) {
+        wp_die('Unauthorized');
+    }
+    if (!isset($_POST['causeway_import_reset_nonce']) || !wp_verify_nonce($_POST['causeway_import_reset_nonce'], 'causeway_import_reset_action')) {
+        wp_die('Invalid nonce');
+    }
+    $defaults = [
+        'running' => false,
+        'phase' => 'idle',
+        'processed' => 0,
+        'total' => 0,
+        'percent' => 0,
+        'state' => 'idle',
+        'started_at' => null,
+        'updated_at' => time(),
+        'error_message' => null,
+        'cancel_requested' => false,
+    ];
+    update_option('causeway_import_status', $defaults, false);
+    error_log('[Causeway] Import status reset by admin');
+    wp_redirect(add_query_arg('import_reset', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
+    exit;
+});
+
 // Register CRON on plugin activation
 register_activation_hook(__FILE__, function () {
     // Ensure registration happens before flush so rules exist

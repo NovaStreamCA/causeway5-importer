@@ -53,6 +53,9 @@ class Causeway_Admin {
         if (isset($_GET['imported']) && $_GET['imported'] === '1') {
             echo '<div class="notice notice-success is-dismissible"><p>✅ Listings imported successfully.</p></div>';
         }
+        if (isset($_GET['import_reset']) && $_GET['import_reset'] === '1') {
+            echo '<div class="notice notice-info is-dismissible"><p>🔄 Import status reset.</p></div>';
+        }
         ?>
 <div class="wrap">
     <h1>Causeway Data Importer <span style='font-size: 1.1rem;'>(Causeway to WordPress)</span></h1>
@@ -92,11 +95,22 @@ class Causeway_Admin {
             <div style="visibility:hidden;"></div>
         </div>
     </div>
-    <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
-        <?php wp_nonce_field('causeway_import_action', 'causeway_import_nonce'); ?>
-        <input type="hidden" name="action" value="causeway_manual_import">
-        <input type="submit" name="causeway_import_submit" class="button button-primary" value="Start Import" <?php echo $running ? 'disabled' : ''; ?>>
-    </form>
+    <div style="margin-top:10px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+        <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="margin:0;">
+            <?php wp_nonce_field('causeway_import_action', 'causeway_import_nonce'); ?>
+            <input type="hidden" name="action" value="causeway_manual_import">
+            <input type="submit" name="causeway_import_submit" class="button button-primary" value="Start Import" <?php echo $running ? 'disabled' : ''; ?>>
+        </form>
+        <div id="cw-inline-controls" style="display:<?php echo $running ? 'flex' : 'none'; ?>; gap:8px; align-items:center;">
+            <button type="button" class="button" id="cw-cancel-btn">Cancel Import</button>
+            <span id="cw-cancelled" style="display:none;color:#555;">Cancel requested…</span>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Reset status? This will clear the running flag.');" style="margin:0;display:inline;">
+                <?php wp_nonce_field('causeway_import_reset_action', 'causeway_import_reset_nonce'); ?>
+                <input type="hidden" name="action" value="causeway_manual_import_reset" />
+                <button type="submit" class="button">Force Reset Status</button>
+            </form>
+        </div>
+    </div>
 </div>
 <script>
 (function(){
@@ -107,6 +121,9 @@ class Causeway_Admin {
     var $count = document.getElementById('cw-count');
     var $total = document.getElementById('cw-total');
     var $pct = document.getElementById('cw-percent');
+    var $cancelBtn = document.getElementById('cw-cancel-btn');
+    var $cancelled = document.getElementById('cw-cancelled');
+    var $inlineControls = document.getElementById('cw-inline-controls');
     var $err = document.getElementById('cw-error');
     function poll(){
         var xhr = new XMLHttpRequest();
@@ -129,6 +146,9 @@ class Causeway_Admin {
                     }
                     if ($pct) $pct.textContent = percent;
                     if ($err) $err.style.display = 'none';
+                    if ($cancelBtn) $cancelBtn.disabled = !!s.cancel_requested;
+                    if ($cancelled) $cancelled.style.display = s.cancel_requested ? '' : 'none';
+                    if ($inlineControls) $inlineControls.style.display = 'flex';
                 } else if (s.state === 'error') {
                     if ($wrap) $wrap.style.display = 'block';
                     if ($phase) $phase.textContent = 'error';
@@ -136,11 +156,23 @@ class Causeway_Admin {
                     clearInterval(timer);
                 } else {
                     if ($wrap) $wrap.style.display = 'none';
+                    if ($inlineControls) $inlineControls.style.display = 'none';
                     clearInterval(timer);
                 }
             } catch(e){}
         };
         xhr.send('action=causeway_import_status');
+    }
+    if ($cancelBtn) {
+        $cancelBtn.addEventListener('click', function(){
+            $cancelBtn.disabled = true;
+            if ($cancelled) $cancelled.style.display = '';
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', ajaxurl, true);
+            xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded; charset=UTF-8');
+            xhr.onload = function(){ };
+            xhr.send('action=causeway_import_cancel');
+        });
     }
     var timer = setInterval(poll, 4000);
     poll();
