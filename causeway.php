@@ -4,7 +4,7 @@
 /**
  * Plugin Name: Causeway Listings Importer
  * Description: Imports listings and taxonomies from Causeway API into WordPress with WPML and ACF integration.
- * Version: 1.0.6
+ * Version: 1.0.7
  * Author: NovaStream
  * Update URI: https://github.com/NovaStreamCA/causeway5-importer
  */
@@ -136,11 +136,19 @@ add_action('admin_post_causeway_manual_import', function () {
         wp_die('Invalid nonce');
     }
 
-    // If an import is already running, don't enqueue another; send user back with notice
+    // If an import is already running, block unless stale or in error
     $status = get_option('causeway_import_status');
     if (is_array($status) && !empty($status['running'])) {
-        wp_redirect(add_query_arg('import_running', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
-        exit;
+        $updated_at = isset($status['updated_at']) ? (int)$status['updated_at'] : 0;
+        $state = isset($status['state']) ? $status['state'] : '';
+        $is_stale = $updated_at > 0 ? (time() - $updated_at) > 8 * 60 : false; // 8-minute watchdog
+        $is_error = ($state === 'error');
+        if (!$is_stale && !$is_error) {
+            wp_redirect(add_query_arg('import_running', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
+            exit;
+        } else {
+            error_log('[Causeway] Overriding running lock due to ' . ($is_error ? 'error' : 'stale') . ' status.');
+        }
     }
 
     // Schedule a one-off cron event to run the import in the background ASAP.
@@ -157,6 +165,7 @@ add_action('admin_post_causeway_manual_import', function () {
         'processed' => 0,
         'total' => 0,
         'percent' => 0,
+        'state' => 'queued',
         'started_at' => time(),
         'updated_at' => time(),
     ];
@@ -187,8 +196,10 @@ add_action('wp_ajax_causeway_import_status', function () {
         'processed' => 0,
         'total' => 0,
         'percent' => 0,
+        'state' => 'idle',
         'started_at' => null,
         'updated_at' => null,
+        'error_message' => null,
     ];
     $status = array_merge($defaults, $status);
     wp_send_json_success($status);
@@ -304,7 +315,19 @@ function run_causeway_import_export()
 {
     error_log('🕑 Running Causeway import/export via cron @ ' . date('Y-m-d H:i:s'));
     if (class_exists('Causeway_Importer')) {
-        Causeway_Importer::import();
+        try {
+            Causeway_Importer::import();
+        } catch (Throwable $e) {
+            error_log('[Causeway] Import failed: ' . $e->getMessage());
+            $status = get_option('causeway_import_status', []);
+            if (!is_array($status)) { $status = []; }
+            $status['running'] = false;
+            $status['phase'] = 'error';
+            $status['state'] = 'error';
+            $status['error_message'] = $e->getMessage();
+            $status['updated_at'] = time();
+            update_option('causeway_import_status', $status, false);
+        }
     }
 }
 
@@ -329,6 +352,7 @@ function clear_causeway_status()
     $status['running'] = false;
     $status['phase'] = 'idle';
     $status['percent'] = 0;
+    $status['state'] = 'idle';
     update_option('causeway_import_status', $status, false);
 }
 

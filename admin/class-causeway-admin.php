@@ -64,12 +64,15 @@ class Causeway_Admin {
     $processed = intval($status['processed'] ?? 0);
     $total = intval($status['total'] ?? 0);
     $phase = esc_html($status['phase'] ?? 'idle');
+    $state = esc_html($status['state'] ?? 'idle');
+    $error_message = isset($status['error_message']) ? esc_html($status['error_message']) : '';
     $has_total = $total > 0;
     ?>
-    <div id="causeway-progress" style="max-width:600px;margin:15px 0;display:<?php echo $running ? 'block' : 'none'; ?>;">
+    <div id="causeway-progress" style="max-width:600px;margin:15px 0;display:<?php echo ($running || $state === 'error') ? 'block' : 'none'; ?>;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
             <div>
                 <strong>Import status:</strong> <span id="cw-phase"><?php echo $phase; ?></span>
+                <div id="cw-error" style="<?php echo ($state === 'error' && $error_message) ? '' : 'display:none;'; ?>margin-top:4px;color:#b32d2e;font-weight:600;">Error: <?php echo $error_message; ?></div>
             </div>
             <div id="cw-count-wrap" style="color:#555;<?php echo $has_total ? '' : 'display:none;'; ?>;text-align:right;">
                 <span id="cw-count"><?php echo $processed; ?></span>
@@ -104,6 +107,7 @@ class Causeway_Admin {
     var $count = document.getElementById('cw-count');
     var $total = document.getElementById('cw-total');
     var $pct = document.getElementById('cw-percent');
+    var $err = document.getElementById('cw-error');
     function poll(){
         var xhr = new XMLHttpRequest();
         xhr.open('POST', ajaxurl, true);
@@ -124,6 +128,12 @@ class Causeway_Admin {
                         if ((s.total||0) > 0) { $countWrap.style.display = ''; } else { $countWrap.style.display = 'none'; }
                     }
                     if ($pct) $pct.textContent = percent;
+                    if ($err) $err.style.display = 'none';
+                } else if (s.state === 'error') {
+                    if ($wrap) $wrap.style.display = 'block';
+                    if ($phase) $phase.textContent = 'error';
+                    if ($err) { $err.textContent = 'Error: ' + (s.error_message || 'Import failed'); $err.style.display = ''; }
+                    clearInterval(timer);
                 } else {
                     if ($wrap) $wrap.style.display = 'none';
                     clearInterval(timer);

@@ -23,6 +23,7 @@ class Causeway_Importer
         if (!is_array($status)) { $status = []; }
         $status = array_merge([
             'running' => true,
+            'state' => 'running',
             'phase' => self::$current_phase,
             'processed' => self::$processed_listings,
             'total' => self::$total_listings,
@@ -59,6 +60,25 @@ class Causeway_Importer
         self::update_status();
     }
 
+    public static function shutdown_handler(): void
+    {
+        // If import unexpectedly terminated, mark status as error so UI can recover
+        $last = error_get_last();
+        $status = get_option('causeway_import_status', []);
+        if (!is_array($status)) { $status = []; }
+        $still_running = !empty($status['running']);
+        if ($still_running) {
+            $msg = $last ? ( ($last['message'] ?? 'Unknown error') . ' @ ' . ($last['file'] ?? '') . ':' . ($last['line'] ?? '') ) : 'Import terminated unexpectedly';
+            self::update_status([
+                'running' => false,
+                'state' => 'error',
+                'phase' => 'error',
+                'error_message' => $msg,
+            ]);
+            error_log('[Causeway] Import shutdown handler captured error: ' . $msg);
+        }
+    }
+
     public static function import()
     {
         self::log('start import');
@@ -66,7 +86,9 @@ class Causeway_Importer
         self::$processed_listings = 0;
         self::set_phase('bootstrap');
         // Mark running immediately
-        self::update_status(['running' => true, 'started_at' => time()]);
+        self::update_status(['running' => true, 'state' => 'running', 'started_at' => time()]);
+        // Register a shutdown handler to flag errors on fatal termination
+        register_shutdown_function([self::class, 'shutdown_handler']);
         
         $baseURL = get_field('causeway_api_url', 'option');
 
@@ -130,8 +152,8 @@ class Causeway_Importer
         self::export_listings();
 
         // Done
-        self::set_phase('done');
-        self::update_status(['running' => false, 'percent' => 1.0]);
+    self::set_phase('done');
+    self::update_status(['running' => false, 'state' => 'done', 'percent' => 1.0]);
 
         wp_defer_term_counting(false);
         wp_suspend_cache_addition(false);
