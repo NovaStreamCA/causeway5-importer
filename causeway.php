@@ -316,6 +316,192 @@ if (defined('WP_CLI') && WP_CLI) {
             $secs = number_format(microtime(true) - $start, 2);
             WP_CLI::success("Import finished in {$secs}s");
         }
+
+        /**
+         * Test occurrence expansion for a JSON dates payload (debug helper).
+         *
+         * ## OPTIONS
+         *
+         * [--json=<json>]
+         * : Inline JSON string representing an array of date objects (same shape as API dates repeater),
+         *   or an object with a top-level "dates" key.
+         *
+         * [--file=<path>]
+         * : Path to a JSON file containing the dates array or object with "dates" key.
+         *
+         * [--year=<year>]
+         * : Force the target window year (default = current year).
+         *
+         * [--tz=<timezone>]
+         * : Preferred fallback timezone identifier (default UTC) when RRULE lacks TZID/"Z".
+         *
+         * [--all]
+         * : Show all occurrences instead of the first 25.
+         *
+         * [--jsonout]
+         * : Dump the raw occurrences array as pretty JSON after the table.
+         *
+         * [--format=<table|json>]
+         * : Convenience output mode. --format=json is equivalent to --jsonout (table suppressed).
+         *
+         * [--sample=<name>]
+         * : Use a built-in sample instead of providing JSON. Available: 'utc' (default fallback), 'halifax'.
+         *
+         * ## EXAMPLES
+         *
+         *     wp causeway test-occurrences --json='[{"start_at":"2025-10-17 14:00:00","end_at":"2026-02-06 21:00:00","rrule":"DTSTART:20251017T140000Z\nRRULE:INTERVAL=1;UNTIL=20260206T210000Z;FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"}]' --year=2025
+         *     wp causeway test-occurrences --file=dates.json --tz=America/Halifax --format=json
+         *     wp causeway test-occurrences --sample=halifax --year=2025
+         *
+         * @subcommand test-occurrences
+         * @when after_wp_load
+         */
+        public function test_occurrences($args, $assoc_args)
+        {
+            // Accept JSON input from multiple sources for robustness across shells/WP-CLI parsing quirks.
+            $raw = null;
+
+            // 1) Primary: --json inline string
+            if (isset($assoc_args['json']) && $assoc_args['json'] !== '') {
+                $raw = (string) $assoc_args['json'];
+            }
+
+            // 2) Aliases: --data or --json-input
+            if ($raw === null) {
+                foreach ([ 'data', 'json-input', 'json_input' ] as $alt) {
+                    if (isset($assoc_args[$alt]) && $assoc_args[$alt] !== '') {
+                        $raw = (string) $assoc_args[$alt];
+                        break;
+                    }
+                }
+            }
+
+            // 3) File path via --file (or --infile alias)
+            if ($raw === null) {
+                $fileOpt = null;
+                if (!empty($assoc_args['file'])) {
+                    $fileOpt = $assoc_args['file'];
+                } elseif (!empty($assoc_args['infile'])) {
+                    $fileOpt = $assoc_args['infile'];
+                }
+                if (!empty($fileOpt)) {
+                    $path = $fileOpt;
+                    if (!file_exists($path)) {
+                        WP_CLI::error("File not found: $path");
+                        return;
+                    }
+                    $raw = file_get_contents($path);
+                }
+            }
+
+            // 4) First positional arg as JSON string
+            if ($raw === null && !empty($args) && is_string($args[0])) {
+                $first = trim($args[0]);
+                if ($first !== '' && ($first[0] === '{' || $first[0] === '[')) {
+                    $raw = $first;
+                }
+            }
+
+            $dates = null;
+            // Built-in samples via --sample
+            $sample = isset($assoc_args['sample']) ? strtolower($assoc_args['sample']) : null;
+            if ($sample) {
+                if ($sample === 'halifax') {
+                    WP_CLI::log("Using sample: halifax (TZID=America/Halifax with 11:00 local wall time)");
+                    $dates = [
+                        [
+                            'start_at' => '2025-10-17 11:00:00', // local wall time reference
+                            'end_at'   => '2026-02-06 18:00:00', // 7h duration to match sample pattern
+                            'rrule'    => "DTSTART;TZID=America/Halifax:20251017T110000\nRRULE:INTERVAL=1;UNTIL=20260206T210000Z;FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+                        ],
+                    ];
+                } else { // default/utc
+                    WP_CLI::log("Using sample: utc (DTSTART with Z; UTC-anchored times)");
+                    $dates = [
+                        [
+                            'start_at' => '2025-10-17 14:00:00',
+                            'end_at'   => '2026-02-06 21:00:00',
+                            'rrule'    => "DTSTART:20251017T140000Z\nRRULE:INTERVAL=1;UNTIL=20260206T210000Z;FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+                        ],
+                    ];
+                }
+            } elseif ($raw === null) {
+                // Fallback to UTC sample when nothing provided
+                WP_CLI::log('No --json/--file provided; using built-in sample payload (utc).');
+                $dates = [
+                    [
+                        'start_at' => '2025-10-17 14:00:00',
+                        'end_at'   => '2026-02-06 21:00:00',
+                        'rrule'    => "DTSTART:20251017T140000Z\nRRULE:INTERVAL=1;UNTIL=20260206T210000Z;FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+                    ],
+                ];
+            } else {
+                $decoded = json_decode($raw, true);
+                if ($decoded === null || json_last_error() !== JSON_ERROR_NONE) {
+                    WP_CLI::error('Invalid JSON input: ' . json_last_error_msg());
+                    return;
+                }
+
+                $dates = isset($decoded['dates']) && is_array($decoded['dates']) ? $decoded['dates'] : (is_array($decoded) ? $decoded : []);
+                if (!is_array($dates)) {
+                    WP_CLI::error('Dates payload must be an array or object with "dates" key');
+                    return;
+                }
+            }
+
+            $year   = isset($assoc_args['year']) ? (int)$assoc_args['year'] : null;
+            // If --tz is not provided, pass NULL so importer uses the WordPress site timezone
+            $tz     = (array_key_exists('tz', $assoc_args) && $assoc_args['tz'] !== '') ? $assoc_args['tz'] : null;
+            $format = isset($assoc_args['format']) ? strtolower($assoc_args['format']) : 'table';
+
+            if (!in_array($format, ['table','json'], true)) {
+                WP_CLI::error('--format must be table or json');
+            }
+
+            if (!class_exists('Causeway_Importer')) {
+                WP_CLI::error('Causeway_Importer class not loaded.');
+            }
+
+            if (!method_exists('Causeway_Importer', 'debug_build_occurrences')) {
+                WP_CLI::error('debug_build_occurrences() is missing from Causeway_Importer. Please update the plugin.');
+                return;
+            }
+
+            if ($tz === null) {
+                $siteTz = get_option('timezone_string') ?: 'UTC';
+                WP_CLI::log('Using site timezone: ' . $siteTz);
+            }
+
+            $result = Causeway_Importer::debug_build_occurrences($dates, $year, $tz);
+            $rows   = $result['rows'];
+            $next   = $result['next'];
+
+            WP_CLI::log('Total occurrences: ' . count($rows));
+            WP_CLI::log('Next occurrence: ' . ($next ?: '(none in future)'));
+
+            $showAll = isset($assoc_args['all']);
+            if ($format === 'table') {
+                $max = $showAll ? count($rows) : min(25, count($rows));
+                $table = [];
+                for ($i = 0; $i < $max; $i++) {
+                    $table[] = [
+                        'index' => $i,
+                        'start_utc' => $rows[$i]['occurrence_start'] ?? '',
+                        'end_utc'   => $rows[$i]['occurrence_end'] ?? '',
+                    ];
+                }
+                if ($table) {
+                    WP_CLI\Utils\format_items('table', $table, ['index','start_utc','end_utc']);
+                }
+                if ($max < count($rows) && !$showAll) {
+                    WP_CLI::log('… (use --all to show full list)');
+                }
+            }
+
+            if ($format === 'json' || !empty($assoc_args['jsonout'])) {
+                WP_CLI::log(json_encode($rows, JSON_PRETTY_PRINT));
+            }
+        }
     }
 
     WP_CLI::add_command('causeway', 'Causeway_CLI_Command');

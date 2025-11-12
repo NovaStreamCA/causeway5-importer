@@ -12,6 +12,13 @@ class Causeway_Importer
     private static $start;
     private static $baseURL = 'https://api-causeway5.novastream.dev/';
     private static $term_cache = [];
+    
+    private static function occ_log($message): void {
+        if (is_array($message) || is_object($message)) {
+            $message = print_r($message, true);
+        }
+        error_log('[Causeway:occ] ' . $message);
+    }
 
     public static function import()
     {
@@ -770,7 +777,8 @@ class Causeway_Importer
         $imported_ids = [];
 
         // Build base endpoint with status filter
-        $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
+        // $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
+        $endpoint = self::$baseURL . 'listings?search=listings.id&compare==&value=1368';
 
         // Apply optional filters (Areas / Communities) from settings page
         $area_ids = get_field('import_filter_areas', 'option') ?: [];
@@ -1362,66 +1370,173 @@ class Causeway_Importer
      *
      * @return array [$rows, $nextString]
      */
-    private static function build_occurrences_for_acf(array $dates): array {
-        // $tz      = new DateTimeZone( get_option('timezone_string') ?: 'UTC' );
-        $tz      = new DateTimeZone('UTC');
-        $year    = (int) Carbon::now($tz)->year;
-        $format = 'Y-m-d H:i:s';                     // original API format
-        $rows    = [];
-        
+    private static function build_occurrences_for_acf(array $dates, ?int $forceYear = null, ?string $tzName = null): array {
+        // Option C: interpret DTSTART timezone if present (TZID or Z) for local wall-time, then store UTC.
+        // Force behavior: allow treating DTSTART with trailing 'Z' (UTC) as local wall-time by default
+        // so weekly rules keep a constant local clock across DST and only UTC shifts.
+    $defaultSiteTz = get_option('timezone_string') ?: 'UTC';
+    $fallbackTzName = $tzName ?: apply_filters('causeway_default_source_timezone', $defaultSiteTz);
+        $treatZAsLocal = apply_filters('causeway_treat_rrule_z_as_local', true);
+    $utcTz = new DateTimeZone('UTC');
+        $year  = $forceYear ?: (int) Carbon::now($utcTz)->year; // window year in UTC
+        $format = 'Y-m-d H:i:s'; // original API format
+        $rows   = [];
 
-        // Collect every occurrence inside this calendar year
+    self::occ_log("build_occurrences_for_acf: year={$year} siteTz={$defaultSiteTz} fallbackTz={$fallbackTzName} treatZAsLocal=" . ($treatZAsLocal ? '1' : '0'));
+
+        // Filter window in UTC
+        $windowStart = Carbon::create($year, 1, 1, 0, 0, 0, $utcTz);
+        $windowEnd   = Carbon::create($year, 12, 31, 23, 59, 59, $utcTz);
+
+        // Helper: extract source timezone from RRULE/DTSTART, else fallback (optionally treat Z as local)
+        $extractTz = static function (string $rrule, string $fallback, bool $treatZAsLocal): string {
+            if (preg_match('/DTSTART;TZID=([^:]+):/i', $rrule, $m)) {
+                return $m[1];
+            }
+            if (preg_match('/DTSTART:[0-9T]+Z(\n|$)/i', $rrule)) {
+                return $treatZAsLocal ? $fallback : 'UTC';
+            }
+            return $fallback;
+        };
+
         foreach ($dates as $entry) {
+            $entryRows = [];
+            $start = null;
+            $end   = null;
+            $rrule_string = (string)($entry['rrule'] ?? '');
+            $sourceTzName = $rrule_string ? $extractTz($rrule_string, $fallbackTzName, $treatZAsLocal) : $fallbackTzName;
+            try { $sourceTz = new DateTimeZone($sourceTzName); } catch (\Throwable $e) { $sourceTz = $utcTz; $sourceTzName = 'UTC'; }
 
-            $start = Carbon::createFromFormat($format, $entry['start_at'] ?? '', $tz);
-            $end   = Carbon::createFromFormat($format, $entry['end_at']   ?? '', $tz);
+            if (!empty($entry['start_at'])) {
+                try { $start = Carbon::createFromFormat($format, $entry['start_at'], $sourceTz); } catch (\Throwable $e) { $start = null; }
+            }
+            if (!empty($entry['end_at'])) {
+                try { $end = Carbon::createFromFormat($format, $entry['end_at'], $sourceTz); } catch (\Throwable $e) { $end = null; }
+            }
 
             if (!$start || !$end) {
                 self::log('Invalid date: ' . json_encode($entry));
                 continue;
             }
 
-            $start->year($year);
-            $end  ->year($year);
-            $duration = $end->diffInMinutes($start);
+            $has_rrule = !empty($entry['rrule']);
+            self::occ_log('Entry: tzDetected=' . $sourceTzName . ' hasRRule=' . ($has_rrule ? '1' : '0') . ' start_at=' . ($entry['start_at'] ?? '') . ' end_at=' . ($entry['end_at'] ?? ''));
 
-            if (!empty($entry['rrule'])) {
-                // Patch DTSTART / UNTIL to this year
-                $rr = preg_replace(
-                    ['/DTSTART:(\d{4})(\d{4}T\d{6}Z)/', '/UNTIL=(\d{4})(\d{4}T\d{6}Z)/'],
-                    ["DTSTART:{$year}\$2",              "UNTIL={$year}\$2"],
-                    $entry['rrule']
-                );
-                foreach ((new RRule($rr))->getOccurrencesBetween(
-                    Carbon::create($year,1,1,0,0,0,$tz),
-                    Carbon::create($year,12,31,23,59,59,$tz)
-                ) as $occ) {
-                    $rows[] = [
-                        'occurrence_start' => $occ->setTimezone($tz)->format('Y-m-d H:i:s'),
-                        'occurrence_end'   => $occ->modify("+{$duration} minutes")->setTimezone($tz)->format('Y-m-d H:i:s'),
-                    ];
+            // Compute a sane single-occurrence duration.
+            // When RRULE is present (esp. with BYDAY), treat end_at as a time-of-day.
+            // If end time is <= start time, assume it wraps to next day.
+            if ($has_rrule) {
+                $start_minutes = (int)$start->format('H') * 60 + (int)$start->format('i');
+                $end_minutes   = (int)$end->format('H')   * 60 + (int)$end->format('i');
+                $duration      = $end_minutes - $start_minutes;
+                if ($duration <= 0) {
+                    $duration += 24 * 60; // cross-midnight
                 }
             } else {
-                $rows[] = [
-                    'occurrence_start' => $start->format('Y-m-d H:i:s'),
-                    'occurrence_end'   => $end  ->format('Y-m-d H:i:s'),
-                ];
+                // One-off event: use the real span
+                $duration = max(0, $end->diffInMinutes($start));
             }
+
+            if ($has_rrule) {
+                try {
+                    $hasDtstart = stripos($rrule_string, 'DTSTART') !== false;
+                    $hasDtstartZ = (bool) preg_match('/DTSTART:[0-9T]+Z(\n|$)/i', $rrule_string);
+                    $startForRRule = $start; // default seed
+
+                    // If DTSTART is UTC (Z) but we are treating Z as local, derive the local wall time from DTSTART
+                    if ($hasDtstart && $hasDtstartZ && $treatZAsLocal) {
+                        if (preg_match('/DTSTART:(\d{8}T\d{6})Z/i', $rrule_string, $m)) {
+                            try {
+                                $dtStartUtc = Carbon::createFromFormat('Ymd\THis', $m[1], $utcTz);
+                                $startForRRule = Carbon::instance($dtStartUtc)->setTimezone($sourceTz);
+                            } catch (\Throwable $e) {
+                                // fall back to original $start
+                                $startForRRule = $start;
+                            }
+                        }
+                    }
+
+                    if ($hasDtstart && $hasDtstartZ && $treatZAsLocal) {
+                        // Strip DTSTART line so we can seed local dtstart explicitly for DST-aware expansion
+                        $rrule_no_dtstart = preg_replace('/^DTSTART[^\n]*\n/m', '', $rrule_string);
+                        self::occ_log('Using RRULE without DTSTART; seedLocal=' . ($startForRRule ? $startForRRule->format('Y-m-d H:i:s') : 'null') . ' tz=' . $sourceTzName);
+                        $rr = new RRule($rrule_no_dtstart, $startForRRule);
+                    } elseif ($hasDtstart) {
+                        self::occ_log('Using RRULE with embedded DTSTART (kept as-is).');
+                        $rr = new RRule($rrule_string);
+                    } else {
+                        self::occ_log('Using RRULE with explicit seed; seedLocal=' . ($startForRRule ? $startForRRule->format('Y-m-d H:i:s') : 'null') . ' tz=' . $sourceTzName);
+                        $rr = new RRule($rrule_string, $startForRRule);
+                    }
+                    $occurrences = $rr->getOccurrencesBetween($windowStart, $windowEnd);
+                    self::occ_log('Generated occurrences this entry: ' . count($occurrences));
+                    foreach ($occurrences as $occ) {
+                        // Work in local/source timezone for duration math, then convert to UTC
+                        $occ_start_local = Carbon::instance($occ)->setTimezone($sourceTz);
+                        $occ_end_local   = (clone $occ_start_local)->addMinutes($duration);
+                        $occ_start_utc   = (clone $occ_start_local)->setTimezone($utcTz);
+                        $occ_end_utc     = (clone $occ_end_local)->setTimezone($utcTz);
+                        $entryRows[] = [
+                            'occurrence_start' => $occ_start_utc->format('Y-m-d H:i:s'),
+                            'occurrence_end'   => $occ_end_utc->format('Y-m-d H:i:s'),
+                        ];
+                    }
+                } catch (\Throwable $e) {
+                    self::log('RRULE parse/fetch failed: ' . $e->getMessage() . ' | ' . $rrule_string);
+                }
+            } else {
+                // One-off: convert to UTC for storage and include only if within UTC window
+                $startUtc = (clone $start)->setTimezone($utcTz);
+                $endUtc   = (clone $end)->setTimezone($utcTz);
+                if ($startUtc->betweenIncluded($windowStart, $windowEnd)) {
+                    $entryRows[] = [
+                        'occurrence_start' => $startUtc->format('Y-m-d H:i:s'),
+                        'occurrence_end'   => $endUtc->format('Y-m-d H:i:s'),
+                    ];
+                }
+            }
+
+            // Per-entry sampling: first 2, first >= Nov 1, last 2
+            if (!empty($entryRows)) {
+                $sample = [];
+                $sample = array_merge($sample, array_slice($entryRows, 0, 2));
+                $nov1 = sprintf('%04d-11-01 00:00:00', $year);
+                foreach ($entryRows as $r) {
+                    if ($r['occurrence_start'] >= $nov1) { $sample[] = $r; break; }
+                }
+                $tail = array_slice($entryRows, -2);
+                $sample = array_merge($sample, $tail);
+                self::occ_log('Entry samples: ' . json_encode($sample));
+            }
+
+            // accumulate
+            $rows = array_merge($rows, $entryRows);
         }
 
         usort($rows, fn($a,$b) => strcmp($a['occurrence_start'], $b['occurrence_start']));
 
-        // Pick the first one that’s still in the future
-        $now  = Carbon::now($tz)->format('Y-m-d H:i:s');
+        // First future start relative to current UTC time
+        $now  = Carbon::now($utcTz)->format('Y-m-d H:i:s');
         $next = null;
         foreach ($rows as $r) {
-            if ($r['occurrence_start'] >= $now) {
-                $next = $r['occurrence_start'];
-                break;
-            }
+            if ($r['occurrence_start'] >= $now) { $next = $r['occurrence_start']; break; }
         }
 
         return [$rows, $next];
+    }
+
+    /**
+     * Public debug helper used by WP-CLI tester to exercise the private builder
+     * without changing import-time visibility.
+     *
+     * @param array      $dates   Dates payload (array of {start_at,end_at,rrule})
+     * @param int|null   $year    Force window year
+     * @param string|null $tzName Fallback timezone when RRULE lacks TZ info
+     * @return array{rows: array<int, array{occurrence_start:string,occurrence_end:string}>, next: string|null}
+     */
+    public static function debug_build_occurrences(array $dates, ?int $year = null, ?string $tzName = null): array {
+        [$rows, $next] = self::build_occurrences_for_acf($dates, $year, $tzName);
+        return [ 'rows' => $rows, 'next' => $next ];
     }
 
     private static function log($message): void
