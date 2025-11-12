@@ -136,24 +136,62 @@ add_action('admin_post_causeway_manual_import', function () {
         wp_die('Invalid nonce');
     }
 
-    // Schedule a one-off cron event to run the import in the background ASAP
-    // Using the existing 'causeway_cron_hook' which calls Causeway_Importer::import()
-    if (!wp_next_scheduled('causeway_cron_hook')) {
-        // No import currently scheduled; schedule one to run immediately
-        wp_schedule_single_event(time() + 1, 'causeway_cron_hook');
-    } else {
-        // Even if a recurring import exists, still add a single event to run ASAP
-        wp_schedule_single_event(time() + 1, 'causeway_cron_hook');
+    // If an import is already running, don't enqueue another; send user back with notice
+    $status = get_option('causeway_import_status');
+    if (is_array($status) && !empty($status['running'])) {
+        wp_redirect(add_query_arg('import_running', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
+        exit;
     }
 
-    // Optionally try to spawn cron right away (best-effort, harmless if it fails)
+    // Schedule a one-off cron event to run the import in the background ASAP.
+    // Using the existing 'causeway_cron_hook' which calls Causeway_Importer::import().
+    // Previously we used time()+1 which caused a page refresh before WP-Cron picked it up;
+    // using time() ensures the event is immediately due and reduces the need for double clicks.
+    $scheduled_for = time();
+    wp_schedule_single_event($scheduled_for, 'causeway_cron_hook');
+    error_log('🕑 Manual import scheduled for immediate execution @ '.date('Y-m-d H:i:s',$scheduled_for));
+    // Optimistically mark status as queued/running to prevent double-clicks
+    $status = [
+        'running' => true,
+        'phase' => 'queued',
+        'processed' => 0,
+        'total' => 0,
+        'percent' => 0,
+        'started_at' => time(),
+        'updated_at' => time(),
+    ];
+    update_option('causeway_import_status', $status, false);
+
+    // Best-effort immediate cron spawn so the single event executes without waiting for next page load.
     if (function_exists('spawn_cron')) {
         spawn_cron(time());
+    } else {
+        error_log('⚠️ spawn_cron() unavailable; import will wait for next WP-Cron run/page load.');
     }
 
     // Redirect back to admin with queued notice
     wp_redirect(add_query_arg('import_queued', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
     exit;
+});
+
+// AJAX endpoint to fetch current import status
+add_action('wp_ajax_causeway_import_status', function () {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Unauthorized'], 403);
+    }
+    $status = get_option('causeway_import_status', []);
+    if (!is_array($status)) { $status = []; }
+    $defaults = [
+        'running' => false,
+        'phase' => 'idle',
+        'processed' => 0,
+        'total' => 0,
+        'percent' => 0,
+        'started_at' => null,
+        'updated_at' => null,
+    ];
+    $status = array_merge($defaults, $status);
+    wp_send_json_success($status);
 });
 
 add_action('admin_post_causeway_manual_export', function () {
@@ -285,6 +323,13 @@ function run_causeway_export()
 function clear_causeway_status()
 {
     update_option('importing_causeway', '0');
+    // Also clear new structured status
+    $status = get_option('causeway_import_status', []);
+    if (!is_array($status)) { $status = []; }
+    $status['running'] = false;
+    $status['phase'] = 'idle';
+    $status['percent'] = 0;
+    update_option('causeway_import_status', $status, false);
 }
 
 if (defined('WP_CLI') && WP_CLI) {

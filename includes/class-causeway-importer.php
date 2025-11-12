@@ -12,10 +12,61 @@ class Causeway_Importer
     private static $start;
     private static $baseURL = 'https://api-causeway5.novastream.dev/';
     private static $term_cache = [];
+    private static $total_listings = 0;
+    private static $processed_listings = 0;
+    private static $current_phase = '';
+
+    private static function update_status(array $data = []): void
+    {
+        // Merge with existing
+        $status = get_option('causeway_import_status', []);
+        if (!is_array($status)) { $status = []; }
+        $status = array_merge([
+            'running' => true,
+            'phase' => self::$current_phase,
+            'processed' => self::$processed_listings,
+            'total' => self::$total_listings,
+            'percent' => self::compute_percent(),
+            'started_at' => isset($status['started_at']) ? $status['started_at'] : time(),
+            'updated_at' => time(),
+        ], $data);
+        update_option('causeway_import_status', $status, false);
+    }
+
+    private static function compute_percent(): float
+    {
+        // Simple phase weighting: taxonomy + prep (30%), listings processing (60%), export (10%)
+        $phaseWeights = [
+            'bootstrap' => 0.02,
+            'taxonomies' => 0.28,
+            'listings_fetch' => 0.30, // after fetch but before processing begins
+            'listings_process' => 0.90, // will be refined by processed listings
+            'export' => 0.95,
+            'done' => 1.0,
+        ];
+        $base = $phaseWeights[self::$current_phase] ?? 0.0;
+        if (self::$current_phase === 'listings_process' && self::$total_listings > 0) {
+            // Interpolate between listings_fetch (0.30) and export start (0.95)
+            $start = 0.30; $end = 0.95; $fraction = self::$processed_listings / self::$total_listings; if ($fraction > 1) $fraction = 1;
+            return round($start + ($end - $start) * $fraction, 4);
+        }
+        return round($base, 4);
+    }
+
+    private static function set_phase(string $phase): void
+    {
+        self::$current_phase = $phase;
+        self::update_status();
+    }
 
     public static function import()
     {
         self::log('start import');
+        self::$total_listings = 0;
+        self::$processed_listings = 0;
+        self::set_phase('bootstrap');
+        // Mark running immediately
+        self::update_status(['running' => true, 'started_at' => time()]);
         
         $baseURL = get_field('causeway_api_url', 'option');
 
@@ -40,7 +91,8 @@ class Causeway_Importer
         }
         wp_defer_term_counting(true);           // no recounts on every insert
 
-        // Preload and cache calls that would be used multiple times
+    // Preload and cache calls that would be used multiple times
+    self::set_phase('taxonomies');
         self::$areas = self::fetch_remote('areas');
         self::$communities = self::fetch_remote('communities');
         self::$regions = self::fetch_remote('regions');
@@ -76,6 +128,10 @@ class Causeway_Importer
         self::log('✅ Import Completed. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
 
         self::export_listings();
+
+        // Done
+        self::set_phase('done');
+        self::update_status(['running' => false, 'percent' => 1.0]);
 
         wp_defer_term_counting(false);
         wp_suspend_cache_addition(false);
@@ -851,9 +907,13 @@ class Causeway_Importer
             self::log("🔎 Applied filters: areas=" . json_encode($area_causeway_ids) . ", communities=" . json_encode($community_causeway_ids) . " | kept {$post_count}/{$pre_count}");
         }
 
-        $listings_count = is_array($listings) ? count($listings) : 0;
-        self::log('✅ Received ' . $listings_count . ' listings from API. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+    $listings_count = is_array($listings) ? count($listings) : 0;
+    self::$total_listings = $listings_count;
+    self::set_phase('listings_fetch');
+    self::log('✅ Received ' . $listings_count . ' listings from API. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+    self::update_status(['total' => self::$total_listings]);
 
+    self::set_phase('listings_process');
         foreach ($listings as $item) {
             $post_title = $item['name'] ?? '';
             $slug = $item['slug'] ?? '';
@@ -1014,6 +1074,11 @@ class Causeway_Importer
             update_field('next_occurrence',  $next, $post_id);    // single date_time_picker
 
             // error_log("✅ Updated Listing: " . $post_title . " (ID: $post_id)");
+            // Progress increment
+            self::$processed_listings++;
+            if (self::$processed_listings % 10 === 0 || self::$processed_listings === self::$total_listings) {
+                self::update_status();
+            }
         }
 
         self::log("Assigning related listings...");
@@ -1054,6 +1119,9 @@ class Causeway_Importer
 
         $import_count = is_array($imported_ids) ? count($imported_ids) : 0;
         self::log('✅ Imported ' . $import_count . ' of ' . $listings_count . ' listings @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+        // Force a final listings_process update
+        self::update_status();
+        self::set_phase('export');
 
         self::delete_old_listings($imported_ids);
     }

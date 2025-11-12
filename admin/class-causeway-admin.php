@@ -47,6 +47,9 @@ class Causeway_Admin {
         if (isset($_GET['import_queued']) && $_GET['import_queued'] === '1') {
             echo '<div class="notice notice-info is-dismissible"><p>🕑 Import scheduled. It will run in the background shortly. Importing can take up to 30 minutes.</p></div>';
         }
+        if (isset($_GET['import_running']) && $_GET['import_running'] === '1') {
+            echo '<div class="notice notice-warning is-dismissible"><p>⚠️ An import is already running. You can watch progress below.</p></div>';
+        }
         if (isset($_GET['imported']) && $_GET['imported'] === '1') {
             echo '<div class="notice notice-success is-dismissible"><p>✅ Listings imported successfully.</p></div>';
         }
@@ -54,12 +57,85 @@ class Causeway_Admin {
 <div class="wrap">
     <h1>Causeway Data Importer <span style='font-size: 1.1rem;'>(Causeway to WordPress)</span></h1>
     <p>This tool will manually import all listings and taxonomy data from the external Causeway API into your WordPress site.</p>
+    <?php
+    $status = get_option('causeway_import_status', []);
+    $running = is_array($status) && !empty($status['running']);
+    $percent = isset($status['percent']) ? floatval($status['percent']) : 0;
+    $processed = intval($status['processed'] ?? 0);
+    $total = intval($status['total'] ?? 0);
+    $phase = esc_html($status['phase'] ?? 'idle');
+    $has_total = $total > 0;
+    ?>
+    <div id="causeway-progress" style="max-width:600px;margin:15px 0;display:<?php echo $running ? 'block' : 'none'; ?>;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div>
+                <strong>Import status:</strong> <span id="cw-phase"><?php echo $phase; ?></span>
+            </div>
+            <div id="cw-count-wrap" style="color:#555;<?php echo $has_total ? '' : 'display:none;'; ?>;text-align:right;">
+                <span id="cw-count"><?php echo $processed; ?></span>
+                /
+                <span id="cw-total"><?php echo $total; ?></span>
+                Listings Imported
+            </div>
+        </div>
+        <div style="background:#e5e5e5;border-radius:3px;overflow:hidden;height:18px;margin-top:6px;">
+            <div id="cw-bar" style="background:#2271b1;height:100%;width:<?php echo round($percent*100); ?>%;transition:width .3s;"></div>
+        </div>
+        <div style="margin-top:6px;display:flex;align-items:center;justify-content:space-between;">
+            <div style="color:#555;">
+                <span id="cw-percent"><?php echo round($percent*100); ?></span>%
+            </div>
+            <div style="flex:1"></div>
+            <div style="visibility:hidden;"></div>
+        </div>
+    </div>
     <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
         <?php wp_nonce_field('causeway_import_action', 'causeway_import_nonce'); ?>
         <input type="hidden" name="action" value="causeway_manual_import">
-        <input type="submit" name="causeway_import_submit" class="button button-primary" value="Start Import">
+        <input type="submit" name="causeway_import_submit" class="button button-primary" value="Start Import" <?php echo $running ? 'disabled' : ''; ?>>
     </form>
 </div>
+<script>
+(function(){
+    var $wrap = document.getElementById('causeway-progress');
+    var $bar = document.getElementById('cw-bar');
+    var $phase = document.getElementById('cw-phase');
+    var $countWrap = document.getElementById('cw-count-wrap');
+    var $count = document.getElementById('cw-count');
+    var $total = document.getElementById('cw-total');
+    var $pct = document.getElementById('cw-percent');
+    function poll(){
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', ajaxurl, true);
+        xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded; charset=UTF-8');
+        xhr.onload = function(){
+            try {
+                var res = JSON.parse(xhr.responseText);
+                if (!res || !res.success) return;
+                var s = res.data || {};
+                if (s.running) {
+                    if ($wrap) $wrap.style.display = 'block';
+                    var percent = Math.max(0, Math.min(100, Math.round((s.percent||0)*100)));
+                    if ($bar) $bar.style.width = percent + '%';
+                    if ($phase) $phase.textContent = s.phase || 'running';
+                    if ($count) $count.textContent = s.processed || 0;
+                    if ($total) $total.textContent = s.total || 0;
+                    if ($countWrap) {
+                        if ((s.total||0) > 0) { $countWrap.style.display = ''; } else { $countWrap.style.display = 'none'; }
+                    }
+                    if ($pct) $pct.textContent = percent;
+                } else {
+                    if ($wrap) $wrap.style.display = 'none';
+                    clearInterval(timer);
+                }
+            } catch(e){}
+        };
+        xhr.send('action=causeway_import_status');
+    }
+    var timer = setInterval(poll, 4000);
+    poll();
+})();
+</script>
 <?php
     }
 
