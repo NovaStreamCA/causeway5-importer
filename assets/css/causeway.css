@@ -96,8 +96,9 @@
   padding: 8px;
   display: flex;
   align-items: flex-end;
+  justify-content: space-between;
 }
-.listing-card .thumb .thumb-overlay span {
+.listing-card .thumb .thumb-overlay .type {
   color: var(--bs-primary);
   border-radius: 50rem;
   background-color: #FFF;
@@ -107,6 +108,28 @@
   vertical-align: baseline;
   font-weight: 600;
   font-size: 14px;
+}
+.listing-card .thumb .thumb-overlay .date {
+  background-color: var(--bs-primary);
+  padding: 0.5rem 1rem;
+  color: #fff;
+  line-height: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  aspect-ratio: 1;
+  width: auto;
+  border-radius: 0.75rem;
+  text-align: center;
+}
+.listing-card .thumb .thumb-overlay .date .date-month {
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+.listing-card .thumb .thumb-overlay .date .date-day {
+  font-weight: 700;
+  font-size: 1.75rem;
 }
 .listing-card .body {
   padding: 16px 0;
@@ -133,19 +156,6 @@
 .listing-card .title .ta-rating svg {
   width: 1.25em;
   height: 1.25em;
-}
-.listing-card .excerpt {
-  margin: 0 0 12px;
-  font-size: 0.9rem;
-  line-height: 1.4;
-  color: #555;
-}
-.listing-card .type {
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #777;
-  margin-top: auto;
 }
 
 .causeway-archive-listing {

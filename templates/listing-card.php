@@ -12,6 +12,18 @@ $excerpt = get_the_excerpt();
 if (!$excerpt) { $excerpt = wp_trim_words(wp_strip_all_tags(get_the_content()), 25); }
 $types = get_the_terms($post_id, 'listing-type');
 $rating = get_field('tripadvisor_rating', $post_id);
+$nextDate = get_field('next_occurrence', $post_id);
+$nextMonth = '';
+$nextDay  = '';
+if (!empty($nextDate)) {
+    $dt = causeway_parse_occ_dt($nextDate);
+    if ($dt instanceof DateTime) {
+        $tz = wp_timezone();
+        $ts = $dt->getTimestamp();
+        $nextMonth = wp_date('M', $ts, $tz);   // e.g., Nov, Dec
+        $nextDay  = wp_date('j', $ts, $tz); // e.g., 4, 23
+    }
+}
 ?>
 <article <?php post_class('listing-card'); ?>>
     <a href="<?php echo esc_url(get_permalink()); ?>" class="thumb">
@@ -19,7 +31,15 @@ $rating = get_field('tripadvisor_rating', $post_id);
             the_post_thumbnail('medium_large');
         } ?>
         <div class="thumb-overlay">
-            <span><?php echo esc_html($types[0]->name); ?></span>
+            <?php if (!is_wp_error($types) && !empty($types)) : ?>
+                <span class='type'><?php echo esc_html($types[0]->name); ?></span>
+            <?php endif; ?>
+            <?php if ($nextMonth || $nextDay) : ?>
+                <span class='date'>
+                    <span class="date-month"><?php echo esc_html($nextMonth); ?></span>
+                    <span class="date-day"><?php echo esc_html($nextDay); ?></span>
+                </span>
+            <?php endif; ?>
         </div>
     </a>
     <div class="body">
@@ -38,13 +58,26 @@ $rating = get_field('tripadvisor_rating', $post_id);
             </div>
             <?php endif; ?>
         </h3>
-        <!-- <p class="excerpt">
-            <?php echo esc_html(wp_trim_words($excerpt, 25)); ?>
-        </p> -->
-        <!-- <?php if (!is_wp_error($types) && !empty($types)) : ?>
-            <div class="type">
-                <?php echo esc_html($types[0]->name); ?>
-            </div>
-        <?php endif; ?> -->
+
+        <!-- First Start/Last End -->
+        <?php
+        // Data is guaranteed sorted at import; use first start and last end directly.
+        $occurrences = get_field('all_occurrences', $post_id);
+        if (is_array($occurrences) && !empty($occurrences)) {
+            $first = reset($occurrences);
+            $last  = end($occurrences);
+
+            $first_dt = !empty($first['occurrence_start']) ? causeway_parse_occ_dt((string)$first['occurrence_start']) : null;
+            $last_dt  = !empty($last['occurrence_start'])   ? causeway_parse_occ_dt((string)$last['occurrence_start'])   : null;
+
+            if ($first_dt instanceof DateTime && $last_dt instanceof DateTime) {
+                $tz = wp_timezone();
+                $start_label = wp_date('M j', $first_dt->getTimestamp(), $tz);
+                $end_label   = wp_date('M j', $last_dt->getTimestamp(), $tz);
+                $range_label = ($start_label === $end_label) ? $start_label : ($start_label . ' - ' . $end_label);
+                echo '<p class="dates">' . esc_html($range_label) . '</p>';
+            }
+        }
+        ?>
     </div>
 </article>

@@ -101,17 +101,16 @@ while (have_posts()) : the_post();
                     <section class="occurrences">
                         <h2>Dates</h2>
                         <?php if (!empty($next_occ)) : ?>
-                            <p class="next-occurrence">Next: <strong><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($next_occ))); ?></strong></p>
+                            <?php $next_dt = causeway_parse_occ_dt($next_occ); $tz = wp_timezone(); ?>
+                            <p class="next-occurrence">Next: <strong><?php echo esc_html($next_dt ? wp_date(get_option('date_format') . ' ' . get_option('time_format'), $next_dt->getTimestamp(), $tz) : $next_occ); ?></strong></p>
                         <?php endif; ?>
                         <ul>
                             <?php foreach ($occurrences as $row) :
-                                $start = $row['occurrence_start'] ?? '';
-                                $end   = $row['occurrence_end'] ?? '';
-                                if (!$start) continue;
-                                $label = date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($start));
-                                if ($end) {
-                                    $label .= ' – ' . date_i18n(get_option('time_format'), strtotime($end));
-                                }
+                                $start_raw = $row['occurrence_start'] ?? '';
+                                $start_dt = causeway_parse_occ_dt($start_raw);
+                                if (!$start_dt) continue; // skip invalid
+                                $tz = isset($tz) ? $tz : wp_timezone();
+                                $label = wp_date(get_option('date_format') . ' ' . get_option('time_format'), $start_dt->getTimestamp(), $tz);
                             ?>
                                 <li><?php echo esc_html($label); ?></li>
                             <?php endforeach; ?>

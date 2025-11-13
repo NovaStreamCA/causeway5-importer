@@ -55,8 +55,9 @@
             padding: 8px;
             display: flex;
             align-items: flex-end;
+            justify-content: space-between;
 
-            span {
+            .type {
                 color: var(--bs-primary);
                 border-radius: 50rem;
                 background-color: #FFF;
@@ -66,6 +67,31 @@
                 vertical-align: baseline;
                 font-weight: 600;
                 font-size: 14px;
+            }
+
+            .date {
+                background-color: var(--bs-primary);
+                padding: .5rem 1rem;
+                color: #fff;
+                line-height: 1;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                aspect-ratio: 1;
+                width: auto;
+                border-radius: .75rem;
+                text-align: center;
+
+                .date-month {
+                    font-weight: 500;
+                    font-size: .75rem;
+                    text-transform: uppercase;
+                }
+
+                .date-day {
+                    font-weight: 700;
+                    font-size: 1.75rem;
+                }
             }
         }
     }
@@ -99,21 +125,6 @@
                 height: 1.25em;
             }
         }
-    }
-
-    .excerpt {
-        margin: 0 0 12px;
-        font-size: .9rem;
-        line-height: 1.4;
-        color: $color-text-light;
-    }
-
-    .type {
-        font-size: .65rem;
-        text-transform: uppercase;
-        letter-spacing: .5px;
-        color: $color-text-muted;
-        margin-top: auto;
     }
 }
 
