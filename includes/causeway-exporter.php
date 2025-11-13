@@ -639,6 +639,7 @@ function format_locations($rows, $post_id) {
 function map_terms($term_ids, $taxonomy)
 {
     $out = [];
+    $formatted = [];
 
     if (!is_array($term_ids)) {
         return $formatted;
@@ -710,6 +711,7 @@ function format_attachments($items, $listing_id)
 function format_related($ids)
 {
     $out = [];
+    $formatted = [];
 
     if (!is_array($ids)) {
         return $formatted;
