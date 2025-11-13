@@ -406,10 +406,10 @@ function causeway_try_spawn_cli_import(): bool
         return false;
     }
 
-    // Resolve WP-CLI binary and WP path
-    $wp_bin = defined('CAUSEWAY_WP_CLI_BIN') ? CAUSEWAY_WP_CLI_BIN : '';
-    // If not provided, try to locate wp in PATH
-    if ($wp_bin === '' && $can_exec) {
+    // Resolve WP-CLI binary automatically
+    $wp_bin = '';
+    // Try to locate wp in PATH
+    if ($can_exec) {
         $out = [];
         $rv = 1;
         @exec('command -v wp 2>/dev/null', $out, $rv);
@@ -424,7 +424,7 @@ function causeway_try_spawn_cli_import(): bool
         }
     }
     if ($wp_bin === '') {
-        error_log('[Causeway] WP-CLI binary not found. Define CAUSEWAY_WP_CLI_BIN in wp-config.php or install wp command.');
+        error_log('[Causeway] WP-CLI binary not found on PATH. Install WP-CLI (wp) and ensure it is executable.');
         return false;
     }
     $wp_path = apply_filters('causeway_wp_path', ABSPATH);
