@@ -151,13 +151,6 @@ add_action('admin_post_causeway_manual_import', function () {
         }
     }
 
-    // Schedule a one-off cron event to run the import in the background ASAP.
-    // Using the existing 'causeway_cron_hook' which calls Causeway_Importer::import().
-    // Previously we used time()+1 which caused a page refresh before WP-Cron picked it up;
-    // using time() ensures the event is immediately due and reduces the need for double clicks.
-    $scheduled_for = time();
-    wp_schedule_single_event($scheduled_for, 'causeway_cron_hook');
-    error_log('🕑 Manual import scheduled for immediate execution @ '.date('Y-m-d H:i:s',$scheduled_for));
     // Optimistically mark status as queued/running to prevent double-clicks
     $status = [
         'running' => true,
@@ -171,15 +164,32 @@ add_action('admin_post_causeway_manual_import', function () {
     ];
     update_option('causeway_import_status', $status, false);
 
-    // Best-effort immediate cron spawn so the single event executes without waiting for next page load.
-    if (function_exists('spawn_cron')) {
-        spawn_cron(time());
+    // Try to launch the import via WP-CLI in the background to avoid HTTP/Cloudflare timeouts.
+    $spawned_cli = false;
+    if (apply_filters('causeway_cli_spawn_enabled', true)) {
+        $spawned_cli = causeway_try_spawn_cli_import();
+    }
+
+    if ($spawned_cli) {
+        error_log('🚀 Spawned Causeway import via WP-CLI in background');
     } else {
-        error_log('⚠️ spawn_cron() unavailable; import will wait for next WP-Cron run/page load.');
+        // Fallback: schedule a one-off cron event to run the import in the background ASAP.
+        // Using the existing 'causeway_cron_hook' which calls Causeway_Importer::import().
+        $scheduled_for = time();
+        wp_schedule_single_event($scheduled_for, 'causeway_cron_hook');
+        error_log('🕑 Manual import scheduled for immediate execution via WP-Cron @ '.date('Y-m-d H:i:s',$scheduled_for));
+        // Best-effort immediate cron spawn so the single event executes without waiting for next page load.
+        if (function_exists('spawn_cron')) {
+            spawn_cron(time());
+        } else {
+            error_log('⚠️ spawn_cron() unavailable; import will wait for next WP-Cron run/page load.');
+        }
     }
 
     // Redirect back to admin with queued notice
-    wp_redirect(add_query_arg('import_queued', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
+    $args = [ 'import_queued' => '1' ];
+    if ($spawned_cli) { $args['cli'] = '1'; }
+    wp_redirect(add_query_arg($args, admin_url('edit.php?post_type=listing&page=causeway-importer')));
     exit;
 });
 
@@ -380,6 +390,88 @@ function clear_causeway_status()
     $status['percent'] = 0;
     $status['state'] = 'idle';
     update_option('causeway_import_status', $status, false);
+}
+
+/**
+ * Best-effort background spawn of the importer via WP-CLI to avoid HTTP request timeouts.
+ * Returns true if a CLI process was launched, false otherwise.
+ */
+function causeway_try_spawn_cli_import(): bool
+{
+    // Ensure exec/proc_open are permitted
+    $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+    $can_exec = function_exists('exec') && !in_array('exec', $disabled, true);
+    $can_proc = function_exists('proc_open') && !in_array('proc_open', $disabled, true);
+    if (!$can_exec && !$can_proc) {
+        return false;
+    }
+
+    // Resolve WP-CLI binary and WP path
+    $wp_bin = defined('CAUSEWAY_WP_CLI_BIN') ? CAUSEWAY_WP_CLI_BIN : '';
+    // If not provided, try to locate wp in PATH
+    if ($wp_bin === '' && $can_exec) {
+        $out = [];
+        $rv = 1;
+        @exec('command -v wp 2>/dev/null', $out, $rv);
+        if ($rv === 0 && !empty($out[0])) {
+            $wp_bin = trim($out[0]);
+        }
+    }
+    // Fallback to common locations if still empty
+    if ($wp_bin === '') {
+        foreach (['/usr/local/bin/wp','/usr/bin/wp','/bin/wp'] as $candidate) {
+            if (is_executable($candidate)) { $wp_bin = $candidate; break; }
+        }
+    }
+    if ($wp_bin === '') {
+        error_log('[Causeway] WP-CLI binary not found. Define CAUSEWAY_WP_CLI_BIN in wp-config.php or install wp command.');
+        return false;
+    }
+    $wp_path = apply_filters('causeway_wp_path', ABSPATH);
+    $allow_root = is_callable('posix_geteuid') ? (posix_geteuid() === 0) : true;
+    $allow_root_flag = $allow_root ? ' --allow-root' : '';
+
+    // Write logs to content dir
+    $log_dir = trailingslashit(WP_CONTENT_DIR);
+    $log_file = $log_dir . 'causeway-import.log';
+
+    // Compose command
+    // If wp_bin contains spaces (e.g., 'php /path/wp-cli.phar'), treat as full command prefix
+    $cmd_prefix = (strpos($wp_bin, ' ') !== false) ? $wp_bin : escapeshellcmd($wp_bin);
+    $cmd = $cmd_prefix
+        . ' --path=' . escapeshellarg($wp_path)
+        . $allow_root_flag
+        . ' causeway import';
+
+    // Background with nohup; capture PID to indicate success.
+    $bg = 'nohup ' . $cmd . ' >> ' . escapeshellarg($log_file) . ' 2>&1 & echo $!';
+
+    try {
+        if ($can_exec) {
+            $output = [];
+            $exit = 0;
+            @exec($bg, $output, $exit);
+            // If we got a numeric PID back or exit 0, treat as success
+            if ($exit === 0 && (!empty($output) && preg_match('/^[0-9]+$/', trim(end($output))))) {
+                return true;
+            }
+            // Some shells return 0 without echoing PID; accept exit 0 as success
+            if ($exit === 0) { return true; }
+        }
+        if ($can_proc) {
+            $descriptorspec = [0 => ['pipe', 'r'], 1 => ['file', $log_file, 'a'], 2 => ['file', $log_file, 'a']];
+            $process = @proc_open($cmd, $descriptorspec, $pipes, null, null, ['bypass_shell' => true]);
+            if (is_resource($process)) {
+                // Detach immediately
+                @proc_close($process);
+                return true;
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('[Causeway] CLI spawn failed: ' . $e->getMessage());
+    }
+
+    return false;
 }
 
 if (defined('WP_CLI') && WP_CLI) {
