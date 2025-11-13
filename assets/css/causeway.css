@@ -1,317 +1,317 @@
-/* Base styles for Causeway listings plugin */
-/* Grid wrapper */
-.causeway-listings-grid {
-    display: grid;
-    gap: 24px;
-}
-
-/* Column variants */
-.causeway-listings-grid.cols-1 {
-    grid-template-columns: repeat(1, 1fr);
-}
-
-.causeway-listings-grid.cols-2 {
-    grid-template-columns: repeat(2, 1fr);
-}
-
-.causeway-listings-grid.cols-3 {
-    grid-template-columns: repeat(3, 1fr);
-}
-
-.causeway-listings-grid.cols-4 {
-    grid-template-columns: repeat(4, 1fr);
-}
-
-.causeway-listings-grid.cols-5 {
-    grid-template-columns: repeat(5, 1fr);
-}
-
-.causeway-listings-grid.cols-6 {
-    grid-template-columns: repeat(6, 1fr);
-}
-
-.causeway-listings-grid.auto-fill {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-}
-
-/* Listing card base */
-.listing-card {
-    background: transparent;
-    border: none;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: none;
-    /* transition: box-shadow .15s ease, transform .15s ease; */
-    display: flex;
-    flex-direction: column;
-}
-
-.listing-card:hover .thumb img {
-    scale: 1.05;
-    /* box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
-    transform: translateY(-2px); */
-}
-
-.listing-card .thumb {
-    display: block;
-    aspect-ratio: 16/9;
-    background: #f5f5f5;
-    overflow: hidden;
-    border-radius: 8px;
-}
-
-.listing-card .thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    border-radius: 8px;
-    transition: scale .15s ease;
-}
-
-.listing-card .body {
-    padding: 16px 0;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-.listing-card .title {
-    font-size: 20px;
-    margin: 0 0 8px;
-    font-weight: 600;
-}
-
-.listing-card .title a {
-    text-decoration: none;
-    color: inherit;
-}
-
-.listing-card .excerpt {
-    margin: 0 0 12px;
-    font-size: .9rem;
-    line-height: 1.4;
-    color: #555;
-}
-
-.listing-card .type {
-    font-size: .65rem;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    color: #777;
-    margin-top: auto;
-}
-
-/* Archive specific adjustments */
-.causeway-archive-listing .listing-card .title {
-    font-size: 1.1rem;
-}
-
-/* Pagination */
-.causeway-pagination {
-    margin-top: 40px;
-    text-align: center;
-}
-
-.causeway-pagination .page-numbers {
-    display: inline-block;
-    margin: 0 4px;
-    padding: 6px 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    text-decoration: none;
-}
-
-.causeway-pagination .page-numbers.current {
-    background: #0073aa;
-    color: #fff;
-    border-color: #0073aa;
-}
-
-/* Single listing */
-/* Layout container */
+/* Shared components & containers */
 .causeway-container {
-    max-width: 1100px;
-    margin: 40px auto;
-    padding: 0 16px;
-}
-
-.causeway-archive-listing {
-    max-width: 1200px;
-    margin: 40px auto;
-    padding: 0 20px;
-}
-
-.causeway-single-listing .entry-header {
-    margin-bottom: 24px;
-}
-
-.causeway-single-listing .entry-header .entry-title {
-    margin: 0 0 8px;
-}
-
-.listing-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    color: #666;
-    font-size: .9rem;
+  max-width: 1100px;
+  margin: 40px auto;
+  padding: 0 16px;
 }
 
 .causeway-chip {
-    border: 1px solid #ddd;
-    padding: 4px 8px;
-    border-radius: 999px;
-    font-size: .7rem;
-    letter-spacing: .5px;
-    text-transform: uppercase;
-    background: #fff;
+  border: 1px solid #ddd;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: #fff;
+}
+.causeway-chip.featured {
+  background: #fff8e1;
+  border-color: #ffd54f;
+  color: #8a6d00;
 }
 
-.causeway-chip.featured {
-    background: #fff8e1;
-    border-color: #ffd54f;
-    color: #8a6d00;
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Listing archive / loop styles */
+.causeway-listings-grid {
+  display: grid;
+  gap: 24px;
+}
+.causeway-listings-grid.auto-fill {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.causeway-listings-grid.cols-1 {
+  grid-template-columns: repeat(1, 1fr);
+}
+
+.causeway-listings-grid.cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.causeway-listings-grid.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.causeway-listings-grid.cols-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.causeway-listings-grid.cols-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.causeway-listings-grid.cols-6 {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.listing-card {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+}
+.listing-card:hover .thumb img {
+  transform: scale(1.05);
+}
+.listing-card .thumb {
+  display: block;
+  aspect-ratio: 1.49;
+  background: #f5f5f5;
+  overflow: hidden;
+  border-radius: 8px;
+  position: relative;
+}
+.listing-card .thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 8px;
+  transition: all 0.5s;
+}
+.listing-card .thumb .thumb-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  display: flex;
+  align-items: flex-end;
+}
+.listing-card .thumb .thumb-overlay span {
+  color: var(--bs-primary);
+  border-radius: 50rem;
+  background-color: #FFF;
+  padding: 0.35em 0.65em;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  font-weight: 600;
+  font-size: 14px;
+}
+.listing-card .body {
+  padding: 16px 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.listing-card .title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--bs-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.listing-card .title a {
+  text-decoration: none;
+  color: inherit;
+}
+.listing-card .title .ta-rating {
+  display: flex;
+  gap: 5px;
+}
+.listing-card .title .ta-rating svg {
+  width: 1.25em;
+  height: 1.25em;
+}
+.listing-card .excerpt {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: #555;
+}
+.listing-card .type {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #777;
+  margin-top: auto;
+}
+
+.causeway-archive-listing {
+  max-width: 1200px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+.causeway-archive-listing .listing-card .title {
+  font-size: 1.1rem;
+}
+
+.causeway-pagination {
+  margin-top: 40px;
+  text-align: center;
+}
+.causeway-pagination .page-numbers {
+  display: inline-block;
+  margin: 0 4px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  text-decoration: none;
+}
+.causeway-pagination .page-numbers.current {
+  background: #0073aa;
+  color: #fff;
+  border-color: #0073aa;
+}
+
+/* Single listing page styles */
+.causeway-single-listing .entry-header {
+  margin-bottom: 24px;
+}
+.causeway-single-listing .entry-header .entry-title {
+  margin: 0 0 8px;
+}
+
+.listing-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #666;
+  font-size: 0.9rem;
 }
 
 .listing-hero {
-    margin-bottom: 24px;
+  margin-bottom: 24px;
 }
-
 .listing-hero img {
-    width: 100%;
-    height: auto;
-    display: block;
-    border-radius: 12px;
-    aspect-ratio: 16/9;
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 12px;
+  aspect-ratio: 16/9;
 }
 
 .content-layout {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 32px;
-    align-items: start;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 32px;
+  align-items: start;
 }
 
-@media (max-width:960px) {
-    .content-layout {
-        grid-template-columns: 1fr;
-    }
-
-    .sidebar {
-        position: static;
-        top: auto;
-    }
+@media (max-width: 960px) {
+  .content-layout {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    position: static;
+    top: auto;
+  }
 }
-
 .highlights {
-    background: #f8fafc;
-    border: 1px solid #e8eef3;
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 16px;
+  background: #f8fafc;
+  border: 1px solid #e8eef3;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
 }
 
 .highlights-heading {
-    display: block;
-    margin: 0 0 8px;
+  display: block;
+  margin: 0 0 8px;
 }
 
 .gallery {
-    margin-top: 24px;
+  margin-top: 24px;
 }
 
 .gallery h2,
 .occurrences h2,
 .related-listings h2 {
-    font-size: 1.1rem;
-    margin: 0 0 12px;
+  font-size: 1.1rem;
+  margin: 0 0 12px;
 }
 
 .related-listings h2 {
-    font-size: 1.25rem;
-    margin-bottom: 16px;
+  font-size: 1.25rem;
+  margin-bottom: 16px;
 }
 
 .gallery-grid {
-    display: grid;
-    gap: 12px;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }
-
 .gallery-grid figure {
-    margin: 0;
+  margin: 0;
 }
-
 .gallery-grid img {
-    width: 100%;
-    height: 160px;
-    object-fit: cover;
-    border-radius: 8px;
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
 }
 
 .occurrences {
-    margin-top: 24px;
+  margin-top: 24px;
 }
-
 .occurrences ul {
-    list-style: disc;
-    margin: 0 0 0 18px;
-    padding: 0;
+  list-style: disc;
+  margin: 0 0 0 18px;
+  padding: 0;
 }
-
-.next-occurrence {
-    margin: 0 0 8px;
+.occurrences .next-occurrence {
+  margin: 0 0 8px;
 }
 
 .sidebar {
-    position: sticky;
-    top: 24px;
-    align-self: start;
+  position: sticky;
+  top: 24px;
+  align-self: start;
 }
-
 .sidebar-box {
-    margin-bottom: 16px;
+  margin-bottom: 16px;
 }
-
-.chip-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
 .sidebar a {
-    text-decoration: none;
+  text-decoration: none;
 }
-
 .sidebar a:hover {
-    text-decoration: underline;
+  text-decoration: underline;
 }
 
 .links-list,
 .contact-list,
 .address-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .links-list li {
-    margin: 0 0 6px;
+  margin: 0 0 6px;
 }
 
 .address-list li {
-    margin: 0 0 8px;
+  margin: 0 0 8px;
 }
 
 .coords {
-    font-size: .85rem;
-    color: #666;
+  font-size: 0.85rem;
+  color: #666;
 }
 
 .related-listings {
-    margin-top: 40px;
+  margin-top: 40px;
 }
 
-/* Utility classes */
-/* (Chip styles merged above) */
+/*# sourceMappingURL=causeway.css.map */

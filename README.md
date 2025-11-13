@@ -99,3 +99,40 @@ Notes:
 
 - Editing of listings and Causeway taxonomies can be locked with the included `includes/disable-edit.php` (toggle its require in `causeway.php` if needed).
 - Keep ACF groups active; the plugin reads and writes many fields on posts and terms.
+
+## Assets & SCSS
+
+The plugin now supports authoring styles in SCSS while still distributing compiled CSS for WordPress to enqueue.
+
+Source directory:
+- `src/scss/` — SCSS partials and the single entry file `causeway.scss`.
+  - `_variables.scss` — design tokens (colors, spacing, breakpoints).
+  - `_shared.scss` — shared components (container, chips).
+  - `_listing-archive.scss` — archive / loop styles (grid, cards, pagination).
+  - `_listing-single.scss` — single listing page styles (hero, meta, sidebar, gallery).
+  - `causeway.scss` — aggregates partials via `@use`.
+
+Build output:
+- `assets/css/` — compiled CSS files (e.g. `causeway.css`). Only these are loaded by WordPress.
+
+Tooling:
+- `package.json` includes scripts using the Dart Sass CLI.
+  - `npm run build:css` — one-off build (compressed).
+  - `npm run watch:css` — watch mode during development.
+
+Quick start:
+```bash
+cd wp-content/plugins/causeway5-importer
+npm install
+npm run build:css
+```
+
+Recommended workflow:
+1. Edit SCSS in `src/scss/` (add partials and import them in `causeway.scss`).
+2. Run `npm run watch:css` while developing.
+3. Commit both the updated SCSS and the compiled CSS so production sites have the asset without needing build tooling.
+
+Notes:
+- Do not enqueue SCSS directly; only enqueue the compiled CSS file.
+- If you rename the entry SCSS (`causeway.scss`), keep the output filename `causeway.css` (or update any enqueue references accordingly).
+- You can extend variables in `_variables.scss` for color, spacing, breakpoints.

@@ -3,3 +3,8 @@
 
 # Ignore all Gzip files
 *.gz
+
+# Node build artifacts
+node_modules/
+.sass-cache/
+package-lock.json
