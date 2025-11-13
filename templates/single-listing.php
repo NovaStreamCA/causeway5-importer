@@ -22,6 +22,16 @@ while (have_posts()) : the_post();
     $phone_off     = get_field('phone_offseason', $post_id);
     $phone_toll    = get_field('phone_tollfree', $post_id);
     $websites      = get_field('websites', $post_id) ?: [];
+    $general_site  = null;
+    if (!empty($websites) && is_array($websites)) {
+        foreach ($websites as $w) {
+            $type_id = isset($w['type_id']) ? (int)$w['type_id'] : 0;
+            if ($type_id === 2 && !empty($w['url'])) { // general website
+                $general_site = $w;
+                break;
+            }
+        }
+    }
     $attachments   = get_field('attachments', $post_id) ?: [];
 
     $next_occ      = get_field('next_occurrence', $post_id);
@@ -34,13 +44,39 @@ while (have_posts()) : the_post();
     $communities   = get_the_terms($post_id, 'listing-communities') ?: [];
     $areas         = get_the_terms($post_id, 'listing-areas') ?: [];
     $regions       = get_the_terms($post_id, 'listing-regions') ?: [];
+
+    // Build Google Maps URL from first location (name, civic_address, community name, state)
+    $map_url = null;
+    if (!empty($locations) && is_array($locations)) {
+        $loc = $locations[0];
+        $parts = [];
+        if (!empty($loc['name']))           { $parts[] = (string)$loc['name']; }
+        if (!empty($loc['civic_address']))  { $parts[] = (string)$loc['civic_address']; }
+        // Prefer per-row community term if present; else fall back to first assigned community
+        $community_name = '';
+        if (!empty($loc['community'])) {
+            $cterm = get_term((int)$loc['community'], 'listing-communities');
+            if ($cterm && !is_wp_error($cterm)) {
+                $community_name = $cterm->name;
+            }
+        } elseif (!empty($communities) && !is_wp_error($communities)) {
+            $community_name = $communities[0]->name ?? '';
+        }
+        if ($community_name !== '') { $parts[] = $community_name; }
+        if (!empty($loc['state']))           { $parts[] = (string)$loc['state']; }
+
+        if (!empty($parts)) {
+            $query = implode(' ', array_filter($parts));
+            $map_url = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($query);
+        }
+    }
 ?>
 
 <main id="primary" class="site-main causeway-single-listing causeway-container">
     <article id="post-<?php echo esc_attr($post_id); ?>" <?php post_class(); ?>>
         <header class="entry-header">
             <h1 class="entry-title"><?php the_title(); ?></h1>
-            <div class="listing-meta">
+            <!-- <div class="listing-meta">
                 <?php if (!empty($types) && !is_wp_error($types)) : ?>
                     <?php foreach ($types as $t) : ?>
                         <span class="causeway-chip chip-type"><?php echo esc_html($t->name); ?></span>
@@ -54,7 +90,7 @@ while (have_posts()) : the_post();
                         <?php echo esc_html(is_numeric($price) ? ('$' . number_format((float)$price, 2)) : (string)$price); ?>
                     </span>
                 <?php endif; ?>
-            </div>
+            </div> -->
         </header>
 
         <?php
@@ -72,12 +108,14 @@ while (have_posts()) : the_post();
 
         <div class="entry-content content-layout">
             <div class="content-main">
-                <?php if (!empty($highlights)) : ?>
+                <!-- <?php if (!empty($highlights)) : ?>
                     <div class="highlights">
                         <strong class="highlights-heading">Highlights</strong>
                         <div><?php echo wp_kses_post(wpautop($highlights)); ?></div>
                     </div>
-                <?php endif; ?>
+                <?php endif; ?> -->
+
+                <p class="sub-heading">About</p>
 
                 <div class="the-content">
                     <?php the_content(); ?>
@@ -120,6 +158,19 @@ while (have_posts()) : the_post();
             </div>
 
             <aside class="sidebar">
+                <div class="buttons">
+                    <?php if ($general_site) : ?>
+                        <a href="<?php echo esc_url($general_site['url']); ?>" target="_blank" rel="noopener" class="btn btn-primary">Visit Website</a>
+                    <?php endif; ?>
+                    <?php if (!empty($map_url)) : ?>
+                        <a href="<?php echo esc_url($map_url); ?>" target="_blank" rel="noopener" class="btn btn-primary">Get Directions</a>
+                    <?php endif; ?>
+                </div>
+
+                <p class="side-sub-heading">Location & Contact</p>
+
+                <!-- Locations Here -->
+
                 <?php if (!empty($categories) && !is_wp_error($categories)) : ?>
                     <div class="sidebar-box">
                         <h3>Categories</h3>
@@ -181,18 +232,24 @@ while (have_posts()) : the_post();
                         <h3>Addresses</h3>
                         <ul class="address-list">
                             <?php foreach ($locations as $loc) :
-                                $label = trim(($loc['name'] ?? '') . ' ' . ($loc['civic_address'] ?? ''));
-                                $lat   = $loc['latitude'] ?? '';
-                                $lng   = $loc['longitude'] ?? '';
-                                $map_q = $label ?: trim($lat . ',' . $lng);
+                                $civic = isset($loc['civic_address']) ? trim((string)$loc['civic_address']) : '';
+                                $state = isset($loc['state']) ? trim((string)$loc['state']) : '';
+                                if ($civic === '' || $state === '') { continue; }
+
+                                // Resolve community name from per-row taxonomy term if set; fallback to first assigned community
+                                $community_name = '';
+                                if (!empty($loc['community'])) {
+                                    $cterm = get_term((int)$loc['community'], 'listing-communities');
+                                    if ($cterm && !is_wp_error($cterm)) { $community_name = $cterm->name; }
+                                } elseif (!empty($communities) && !is_wp_error($communities)) {
+                                    $community_name = $communities[0]->name ?? '';
+                                }
+
+                                $line = $civic;
+                                if ($community_name !== '') { $line .= ', ' . $community_name; }
+                                $line .= ', ' . $state;
                             ?>
-                                <li>
-                                    <?php echo esc_html($label ?: 'Location'); ?>
-                                    <?php if ($lat && $lng) : ?>
-                                        <div class="coords">(<?php echo esc_html($lat); ?>, <?php echo esc_html($lng); ?>)</div>
-                                    <?php endif; ?>
-                                    <div><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=<?php echo rawurlencode($map_q); ?>">View on map</a></div>
-                                </li>
+                                <li class="location"><?php echo esc_html($line); ?></li>
                             <?php endforeach; ?>
                         </ul>
                     </div>

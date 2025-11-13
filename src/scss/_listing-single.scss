@@ -1,11 +1,64 @@
 @use 'variables' as *;
 /* Single listing page styles */
 
-.causeway-single-listing .entry-header {
-    margin-bottom: 24px;
+.causeway-single-listing {
 
-    .entry-title {
-        margin: 0 0 8px;
+    .entry-header {
+        margin-bottom: 24px;
+
+        .entry-title {
+            margin: 0;
+            font-weight: 600;
+            font-size: 2rem;
+            color: var(--bs-primary);
+        }
+    }
+
+    .sub-heading {
+        font-weight: 600;
+        font-size: 1.75rem;
+        color: var(--bs-primary);
+    }
+
+    .the-content {
+        p {
+            font-size: 1.25rem;
+            line-height: 2rem;
+        }
+
+        ul {
+            padding-left: 2rem;
+
+            li {
+                font-size: 1.25rem;
+                line-height: 2rem;
+            }
+        }
+
+        strong {
+            // color: var(--bs-primary);
+        }
+    }
+
+    .sidebar {
+        .buttons {
+            display: flex;
+            justify-content: stretch;
+            gap: .5rem;
+            margin-bottom: 1.5rem;
+
+            .btn {
+                flex-grow: 1;
+            }
+        }
+
+        .side-sub-heading {
+            font-weight: 700;
+            font-size: 1.25rem;
+            color: var(--bs-primary);
+            margin-bottom: 12px;
+            margin-bottom: 1rem;
+        }
     }
 }
 
