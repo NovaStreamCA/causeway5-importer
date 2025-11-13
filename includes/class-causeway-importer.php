@@ -991,9 +991,6 @@ class Causeway_Importer
 
             self::$listing_map[$slug] = $post_id;
 
-            // Save ID of imported listing
-            $imported_ids[] = $causeway_id;
-
 
             // ACF Meta
             update_field('causeway_id', $causeway_id, $post_id);
@@ -1092,8 +1089,23 @@ class Causeway_Importer
             // ②  Derive and store occurrences + next upcoming
             [$rows, $next] = self::build_occurrences_for_acf($dates);
 
+            // If there are occurrences but no upcoming next, mark listing as stale and skip it
+            if (!empty($rows) && empty($next)) {
+                self::log("⏭️ Skipping stale listing (no upcoming occurrences): {$post_title} (Causeway ID: {$causeway_id}, WP ID: {$post_id})");
+                // Do NOT add this causeway_id to $imported_ids so delete_old_listings() will purge it
+                // Proceed to next item after updating progress counters
+                self::$processed_listings++;
+                if (self::$processed_listings % 10 === 0 || self::$processed_listings === self::$total_listings) {
+                    self::update_status();
+                }
+                continue;
+            }
+
             update_field('all_occurrences', $rows, $post_id);     // repeater
             update_field('next_occurrence',  $next, $post_id);    // single date_time_picker
+
+            // Save ID of imported listing only if not stale
+            $imported_ids[] = $causeway_id;
 
             // error_log("✅ Updated Listing: " . $post_title . " (ID: $post_id)");
             // Progress increment
