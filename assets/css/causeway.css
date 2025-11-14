@@ -303,6 +303,38 @@
   aspect-ratio: 16/9;
 }
 
+.hero-layout {
+  display: grid;
+  grid-template-columns: 2.25fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  margin-bottom: 2rem;
+}
+.hero-layout.single-image {
+  grid-template-columns: 1fr;
+}
+.hero-layout .main-image {
+  width: 100%;
+  height: 100%;
+}
+.hero-layout .main-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 1.25rem;
+}
+.hero-layout .secondary-image {
+  display: flex;
+  gap: 1.5rem;
+  flex-direction: column;
+  height: 100%;
+}
+.hero-layout .secondary-image img {
+  border-radius: 1.25rem;
+  flex-grow: 1;
+  object-fit: cover;
+}
+
 .content-layout {
   display: grid;
   grid-template-columns: 1.7fr 1fr;

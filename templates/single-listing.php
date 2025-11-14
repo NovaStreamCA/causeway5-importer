@@ -106,19 +106,20 @@ while (have_posts()) : the_post();
             </div>
         </header>
 
-        <?php
-        // TODO
-        // Hero media: featured image, else first attachment URL
-        $hero_output = '';
-        if (has_post_thumbnail($post_id)) {
-            $hero_output = get_the_post_thumbnail($post_id, 'large', ['style' => 'width:100%;height:auto;border-radius:12px;display:block;']);
-        } elseif (!empty($attachments) && !empty($attachments[0]['url'])) {
-            $hero_output = '<img src="' . esc_url($attachments[0]['url']) . '" alt="" style="width:100%;height:auto;border-radius:12px;display:block;" />';
-        }
-        if ($hero_output) {
-            echo '<div class="listing-hero">' . $hero_output . '</div>';
-        }
-        ?>
+        <!-- Hero media -->
+        <div class="hero hero-layout <?php if(empty($attachments[1]['url'])) echo 'single-image'; ?>">
+            <div class="main-image">
+                <img src="<?php echo esc_url($attachments[0]['url']) ?>" alt="Listing Image">
+            </div>
+            <?php if(!empty($attachments[1]['url'])): ?>
+            <div class="secondary-image">
+                <img src="<?php echo esc_url($attachments[1]['url']) ?>" alt="Listing Image">
+                <?php if(!empty($attachments[2]['url'])): ?>
+                <img src="<?php echo esc_url($attachments[2]['url']) ?>" alt="Listing Image">
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+        </div>
 
         <div class="entry-content content-layout">
             <div class="content-main">
