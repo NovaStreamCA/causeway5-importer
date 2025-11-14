@@ -194,7 +194,7 @@ class Causeway_ACF_Blocks {
 
         // Render MixItUp page list outside of the grid when enabled
         if ($pagination) {
-            echo '<div class="mixitup-page-list"></div>';
+            echo '<div class="causeway-page-list"></div>';
         }
 
         echo '</div>'; // .causeway-listings-section

@@ -16,7 +16,7 @@
         var limitAttr = parseInt(grid.getAttribute('data-page-limit') || '0', 10);
         var hasPagination = !isNaN(limitAttr) && limitAttr > 0;
         var mixConfig = {
-            selectors: { target: '.listing-card' },
+            selectors: { target: '.listing-card', pageList: '.causeway-page-list' },
             controls: { scope: hasPagination ? 'global' : 'local', live: true },
             animation: { enable: false, effects: 'fade scale(0.98)', duration: 220 },
             callbacks: {

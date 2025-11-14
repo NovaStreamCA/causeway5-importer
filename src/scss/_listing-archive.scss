@@ -1,6 +1,49 @@
 @use 'variables' as *;
-/* Listing archive / loop styles */
 
+.causeway-listings-section {
+    .causeway-page-list {
+        display: flex;
+        justify-content: center;
+        gap: 4px;
+
+        .mixitup-control {
+            border-radius: 50%;
+            aspect-ratio: 1;
+            width: 35px;
+            height: 35px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 .1rem;
+            color: var(--bs-primary);
+            background-color: #FFF;
+            border: 1px solid rgb(207,
+                    210,
+                    211);
+            transition: all .5s;
+
+            &:not(.mixitup-control-disabled) {
+                &:hover {
+                    background-color: var(--bs-primary);
+                    color: #FFF;
+                }
+            }
+
+            &.mixitup-control-disabled {
+                opacity: .8;
+            }
+
+            &.mixitup-control-active {
+                background-color: var(--bs-primary);
+                color: #FFF;
+            }
+
+
+        }
+    }
+}
+
+/* Listing archive / loop styles */
 .causeway-listings-grid {
     display: grid;
     gap: 24px;

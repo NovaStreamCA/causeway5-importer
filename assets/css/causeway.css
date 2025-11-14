@@ -26,6 +26,37 @@
   gap: 8px;
 }
 
+.causeway-listings-section .causeway-page-list {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+.causeway-listings-section .causeway-page-list .mixitup-control {
+  border-radius: 50%;
+  aspect-ratio: 1;
+  width: 35px;
+  height: 35px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 0.1rem;
+  color: var(--bs-primary);
+  background-color: #FFF;
+  border: 1px solid rgb(207, 210, 211);
+  transition: all 0.5s;
+}
+.causeway-listings-section .causeway-page-list .mixitup-control:not(.mixitup-control-disabled):hover {
+  background-color: var(--bs-primary);
+  color: #FFF;
+}
+.causeway-listings-section .causeway-page-list .mixitup-control.mixitup-control-disabled {
+  opacity: 0.8;
+}
+.causeway-listings-section .causeway-page-list .mixitup-control.mixitup-control-active {
+  background-color: var(--bs-primary);
+  color: #FFF;
+}
+
 /* Listing archive / loop styles */
 .causeway-listings-grid {
   display: grid;
