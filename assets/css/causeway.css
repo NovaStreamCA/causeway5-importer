@@ -50,11 +50,73 @@
   color: #FFF;
 }
 .causeway-listings-section .causeway-page-list .mixitup-control.mixitup-control-disabled {
-  opacity: 0.8;
+  opacity: 0.5;
 }
 .causeway-listings-section .causeway-page-list .mixitup-control.mixitup-control-active {
   background-color: var(--bs-primary);
   color: #FFF;
+}
+.causeway-listings-section .causeway-filterbar .cs-input-group {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  width: auto;
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  border: 1px solid #cfd2d3;
+  flex-basis: 32%;
+}
+.causeway-listings-section .causeway-filterbar .cs-input-group .input-group-text {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--bs-body-color);
+  text-align: center;
+  white-space: nowrap;
+  background-color: var(--bs-tertiary-bg);
+  border: var(--bs-border-width) solid #cfd2d3;
+  border-radius: 0.75rem;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  padding: 0 0.5rem;
+}
+.causeway-listings-section .causeway-filterbar .cs-input-group input {
+  border: 0;
+  position: relative;
+  flex: 1 1 auto;
+  width: 1%;
+  min-width: 0;
+  font-size: 1rem;
+  padding: 0.5rem 0.75rem;
+  outline: none !important;
+}
+.causeway-listings-section .causeway-filterbar select {
+  font-size: 1rem;
+  padding: 0.6rem 2.25rem 0.6rem 0.75rem;
+  border: 1px solid #cfd2d3;
+  border-radius: 0.75rem;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M4 6l4 4 4-4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 16px 16px;
+  padding-right: 2.75rem;
+  line-height: 1.25;
+  cursor: pointer;
+}
+.causeway-listings-section .causeway-filterbar select::-ms-expand {
+  display: none;
+}
+.causeway-listings-section .causeway-filterbar select:-moz-focusring {
+  color: transparent;
+  text-shadow: 0 0 0 #000;
 }
 
 /* Listing archive / loop styles */
@@ -226,9 +288,9 @@
   gap: 1rem;
   padding: 0.75rem 0;
   margin-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 .causeway-filterbar .filter-row {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 0.75rem;
