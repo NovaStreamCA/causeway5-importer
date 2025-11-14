@@ -97,6 +97,15 @@ class Causeway_ACF_Blocks {
                         'ui' => 1,
                         'default_value' => 0,
                     ],
+                    [
+                        'key' => 'field_causeway_listings_show_filterbar',
+                        'label' => 'Show Filterbar',
+                        'name' => 'show_filterbar',
+                        'type' => 'true_false',
+                        'ui' => 1,
+                        'default_value' => 0,
+                        'instructions' => 'Displays a filter bar above the listings.'
+                    ],
                 ],
                 'location' => [
                     [
@@ -127,6 +136,27 @@ class Causeway_ACF_Blocks {
         $orderby     = get_field('orderby') ?: 'date';
         $order       = get_field('order') ?: 'DESC';
         $pagination  = (bool) get_field('show_pagination');
+        $show_filter = (bool) get_field('show_filterbar');
+
+        // Wrap filterbar + grid for scoped controls
+        echo '<div class="causeway-listings-section">';
+
+        // Optional filterbar
+        if ($show_filter) {
+            $basename   = 'listings-filterbar.php';
+            $candidates = [
+                'causeway/' . $basename,
+                $basename,
+                'template-parts/causeway/' . $basename,
+            ];
+            $template = locate_template($candidates);
+            if (!$template) {
+                $template = dirname(__DIR__) . '/templates/' . $basename;
+            }
+            if (file_exists($template)) {
+                include $template;
+            }
+        }
 
         $html = Causeway_Listings_Loop::render([
             'count' => $count,
@@ -137,6 +167,8 @@ class Causeway_ACF_Blocks {
             'show_pagination' => $pagination,
         ]);
         echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+
+        echo '</div>'; // .causeway-listings-section
     }
 }
 

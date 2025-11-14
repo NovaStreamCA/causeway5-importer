@@ -558,6 +558,16 @@ add_action('wp_enqueue_scripts', function () {
         );
         wp_enqueue_script('spotlight');
     }
+
+    // MixItUp for listings filtering/pagination (enqueued when listings grid is present)
+    if (has_block('acf/causeway-listings-grid') || is_post_type_archive('listing')) {
+        $base = plugin_dir_url(__FILE__) . 'assets/js/';
+        wp_register_script('mixitup', $base . 'mixitup.min.js', [], '3.3.1', true);
+        wp_register_script('mixitup-multifilter', $base . 'mixitup-multifilter.min.js', ['mixitup'], '3.3.1', true);
+        wp_register_script('mixitup-pagination', $base . 'mixitup-pagination.min.js', ['mixitup'], '3.3.1', true);
+        wp_register_script('causeway-mixitup-init', $base . 'causeway.mixitup.js', ['mixitup','mixitup-multifilter','mixitup-pagination'], '1.0.0', true);
+        wp_enqueue_script('causeway-mixitup-init');
+    }
 });
 
 // Editor styles (block editor) for listing block previews

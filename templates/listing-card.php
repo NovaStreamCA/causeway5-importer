@@ -11,6 +11,24 @@ $post_id = get_the_ID();
 $excerpt = get_the_excerpt();
 if (!$excerpt) { $excerpt = wp_trim_words(wp_strip_all_tags(get_the_content()), 25); }
 $types = get_the_terms($post_id, 'listing-type');
+$filter_classes = '';
+if (!is_wp_error($types) && !empty($types)) {
+    $parts = [];
+    foreach ($types as $t) {
+        if (!empty($t->slug)) { $parts[] = 'type-' . sanitize_html_class($t->slug); }
+    }
+    if (!empty($parts)) { $filter_classes = ' ' . implode(' ', $parts); }
+}
+$categories_terms = get_the_terms($post_id, 'listings-category');
+$cat_classes = '';
+if (!is_wp_error($categories_terms) && !empty($categories_terms)) {
+    $cparts = [];
+    foreach ($categories_terms as $c) {
+        if (!empty($c->slug)) { $cparts[] = 'cat-' . sanitize_html_class($c->slug); }
+    }
+    if (!empty($cparts)) { $cat_classes = ' ' . implode(' ', $cparts); }
+}
+$title_attr = strtolower(wp_strip_all_tags(get_the_title($post_id)));
 $rating = get_field('tripadvisor_rating', $post_id);
 $nextDate = get_field('next_occurrence', $post_id);
 $price = get_field('price', $post_id);
@@ -26,7 +44,7 @@ if (!empty($nextDate)) {
     }
 }
 ?>
-<article <?php post_class('listing-card'); ?>>
+<article <?php post_class('listing-card' . $filter_classes . $cat_classes); ?> data-title="<?php echo esc_attr($title_attr); ?>">
     <a href="<?php echo esc_url(get_permalink()); ?>" class="thumb">
         <?php if (has_post_thumbnail()) {
             the_post_thumbnail('medium_large');
