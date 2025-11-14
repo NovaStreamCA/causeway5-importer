@@ -428,6 +428,12 @@
   flex-direction: column;
   height: 100%;
 }
+.hero-layout .secondary-image .img-wrap {
+  flex-grow: 1;
+}
+.hero-layout .secondary-image .img-wrap img {
+  height: 100%;
+}
 .hero-layout .secondary-image img {
   border-radius: 1.25rem;
   flex-grow: 1;

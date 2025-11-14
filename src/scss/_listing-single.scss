@@ -275,6 +275,14 @@
         flex-direction: column;
         height: 100%;
 
+        .img-wrap {
+            flex-grow: 1;
+
+            img {
+                height: 100%;
+            }
+        }
+
         img {
             border-radius: 1.25rem;
             flex-grow: 1;
