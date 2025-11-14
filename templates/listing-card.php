@@ -13,6 +13,7 @@ if (!$excerpt) { $excerpt = wp_trim_words(wp_strip_all_tags(get_the_content()), 
 $types = get_the_terms($post_id, 'listing-type');
 $rating = get_field('tripadvisor_rating', $post_id);
 $nextDate = get_field('next_occurrence', $post_id);
+$price = get_field('price', $post_id);
 $nextMonth = '';
 $nextDay  = '';
 if (!empty($nextDate)) {
@@ -38,6 +39,12 @@ if (!empty($nextDate)) {
                 <span class='date'>
                     <span class="date-month"><?php echo esc_html($nextMonth); ?></span>
                     <span class="date-day"><?php echo esc_html($nextDay); ?></span>
+                </span>
+            <?php endif; ?>
+            <?php if ($price && has_term('deals-and-packages', 'listings-category', $post_id)) : ?>
+                <span class='price'>
+                    <span class="date-month">FROM</span>
+                    <span class="date-day">$<?php echo esc_html($price); ?></span>
                 </span>
             <?php endif; ?>
         </div>
@@ -68,7 +75,7 @@ if (!empty($nextDate)) {
             $last  = end($occurrences);
 
             $first_dt = !empty($first['occurrence_start']) ? causeway_parse_occ_dt((string)$first['occurrence_start']) : null;
-            $last_dt  = !empty($last['occurrence_start'])   ? causeway_parse_occ_dt((string)$last['occurrence_start'])   : null;
+            $last_dt  = !empty($last['occurrence_end'])   ? causeway_parse_occ_dt((string)$last['occurrence_end'])   : null;
 
             if ($first_dt instanceof DateTime && $last_dt instanceof DateTime) {
                 $tz = wp_timezone();

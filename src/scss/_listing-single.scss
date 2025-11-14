@@ -15,6 +15,11 @@
         }
     }
 
+    .subtext {
+        font-size: 1rem;
+        margin-bottom: .25rem;
+    }
+
     .sub-heading {
         font-weight: 600;
         font-size: 1.75rem;
@@ -22,6 +27,9 @@
     }
 
     .the-content {
+        font-size: 1.25rem;
+        line-height: 2rem;
+
         p {
             font-size: 1.25rem;
             line-height: 2rem;
@@ -125,6 +133,42 @@
                     padding: 0;
                     color: inherit;
                 }
+            }
+        }
+
+        .occurrences {
+            .dates-list {
+                display: flex;
+                gap: .5rem;
+                flex-wrap: wrap;
+
+                .date-item {
+                    display: inline-block;
+                    background-color: #666;
+                    color: #fff;
+                    padding: .5rem 1rem;
+                    border-radius: 50rem;
+
+                    &.next {
+                        background-color: var(--bs-primary);
+                    }
+                }
+
+                .dates-more {
+                    display: flex;
+                    gap: .5rem;
+                    flex-wrap: wrap;
+                }
+            }
+
+            .dates-toggle {
+                background: none;
+                border: none;
+                color: var(--bs-primary);
+                font-size: 1rem;
+                cursor: pointer;
+                padding: .5rem 0;
+                text-decoration: underline;
             }
         }
     }

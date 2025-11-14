@@ -140,6 +140,11 @@ while (have_posts()) : the_post();
         <div class="entry-content content-layout">
             <div class="content-main">
 
+                <!-- Price -->
+                <?php if(!empty($price)): ?>
+                    <p class="subtext">From $<?php echo esc_html($price); ?></p>
+                <?php endif; ?>
+
                 <!-- Trip Advisor -->
                 <?php if($tripadvisor_rating_url): ?>
                     <a href="<?php echo $tripadvisor_url ?>" target="_blank" class="trip-advisor">
@@ -202,31 +207,11 @@ while (have_posts()) : the_post();
                         </ul>
                     </section>
                 <?php endif; ?>
-
-                <!-- TODO -->
-                <?php if (!empty($occurrences)) : ?>
-                    <section class="occurrences">
-                        <h2>Dates</h2>
-                        <?php if (!empty($next_occ)) : ?>
-                            <?php $next_dt = causeway_parse_occ_dt($next_occ); $tz = wp_timezone(); ?>
-                            <p class="next-occurrence">Next: <strong><?php echo esc_html($next_dt ? wp_date(get_option('date_format') . ' ' . get_option('time_format'), $next_dt->getTimestamp(), $tz) : $next_occ); ?></strong></p>
-                        <?php endif; ?>
-                        <ul>
-                            <?php foreach ($occurrences as $row) :
-                                $start_raw = $row['occurrence_start'] ?? '';
-                                $start_dt = causeway_parse_occ_dt($start_raw);
-                                if (!$start_dt) continue; // skip invalid
-                                $tz = isset($tz) ? $tz : wp_timezone();
-                                $label = wp_date(get_option('date_format') . ' ' . get_option('time_format'), $start_dt->getTimestamp(), $tz);
-                            ?>
-                                <li><?php echo esc_html($label); ?></li>
-                            <?php endforeach; ?>
-                        </ul>
-                    </section>
-                <?php endif; ?>
             </div>
 
             <aside class="sidebar">
+                <!-- Buttons -->
+
                 <div class="buttons">
                     <?php if ($general_site) : ?>
                         <a href="<?php echo esc_url($general_site['url']); ?>" target="_blank" rel="noopener" class="btn btn-primary">Visit Website</a>
@@ -351,6 +336,54 @@ while (have_posts()) : the_post();
                         <?php endforeach; ?>
                     </ul>
                 <?php endif; ?>
+
+                <!-- Date List -->
+                 <?php if (!empty($occurrences)) : ?>
+                    <section class="occurrences">
+                        <p class="side-sub-heading">All Dates</p>
+                        <div class='dates-list' id='<?php echo esc_attr("dates-list-" . $post_id); ?>'>
+                            <?php 
+                            // Setup counts and comparison helpers
+                            $visible_count = 6;
+                            $total_count   = is_array($occurrences) ? count($occurrences) : 0;
+                            $has_more      = $total_count > $visible_count;
+                            $remaining     = max(0, $total_count - $visible_count);
+                            $list_uid      = 'dates-list-' . $post_id;
+
+                            // Parse next occurrence once for comparison
+                            $next_dt_cmp = !empty($next_occ) ? causeway_parse_occ_dt($next_occ) : null;
+
+                            foreach ($occurrences as $i => $row) :
+                                if ($i === $visible_count && $has_more) {
+                                    echo '<div class="dates-more" id="' . esc_attr($list_uid . '-more') . '" style="display:none">';
+                                }
+                                $start_raw = $row['occurrence_start'] ?? '';
+                                $start_dt  = causeway_parse_occ_dt($start_raw);
+                                if (!$start_dt) continue; // skip invalid
+                                $tz     = isset($tz) ? $tz : wp_timezone();
+                                $label  = wp_date('M j g:i A', $start_dt->getTimestamp(), $tz);
+                                $is_next = ($next_dt_cmp && $start_dt && $start_dt->getTimestamp() === $next_dt_cmp->getTimestamp());
+                                $classes = 'date-item' . ($is_next ? ' next' : '');
+                            ?>
+                                <span class='<?php echo esc_attr($classes); ?>'><?php echo esc_html($label); ?></span>
+                            <?php endforeach; ?>
+                            <?php if ($has_more) echo '</div>'; // close .dates-more when present ?>
+                        </div>
+                        <?php if ($has_more) : ?>
+                            <button type="button"
+                                    class="dates-toggle"
+                                    data-target="<?php echo esc_attr($list_uid . '-more'); ?>"
+                                    data-remaining="<?php echo esc_attr((string)$remaining); ?>"
+                                    aria-expanded="false"
+                                    aria-controls="<?php echo esc_attr($list_uid . '-more'); ?>">
+                                <?php echo esc_html('+ ' . $remaining . ' more'); ?>
+                            </button>
+                            <noscript>
+                                <style>#<?php echo esc_attr($list_uid); ?> .dates-more{display:flex !important;}</style>
+                            </noscript>
+                        <?php endif; ?>
+                    </section>
+                <?php endif; ?>
             </aside>
         </div>
 
@@ -387,6 +420,32 @@ while (have_posts()) : the_post();
             <?php endif; endif; ?>
     </article>
 </main>
+
+<script>
+    // Used for the show more/less toggle on date lists
+(function(){
+    if (window.__causewayDatesToggleInit) return;
+    window.__causewayDatesToggleInit = true;
+    document.addEventListener('click', function(e){
+        var btn = e.target.closest && e.target.closest('.dates-toggle');
+        if (!btn) return;
+        var id = btn.getAttribute('data-target');
+        var more = document.getElementById(id);
+        if (!more) return;
+        var isHidden = more.style.display === '' || more.style.display === 'none';
+        if (isHidden) {
+            more.style.display = 'flex';
+            btn.setAttribute('aria-expanded','true');
+            btn.textContent = 'Show less';
+        } else {
+            more.style.display = 'none';
+            btn.setAttribute('aria-expanded','false');
+            var remaining = btn.getAttribute('data-remaining') || '';
+            btn.textContent = remaining ? ('+ ' + remaining + ' more') : '+ more';
+        }
+    });
+})();
+</script>
 
 <?php endwhile; // end of the loop. ?>
 

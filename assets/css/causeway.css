@@ -109,6 +109,27 @@
   font-weight: 600;
   font-size: 14px;
 }
+.listing-card .thumb .thumb-overlay .price {
+  background-color: var(--bs-primary);
+  padding: 0.5rem 1rem;
+  color: #fff;
+  line-height: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: auto;
+  border-radius: 0.75rem;
+  text-align: center;
+}
+.listing-card .thumb .thumb-overlay .price .date-month {
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+.listing-card .thumb .thumb-overlay .price .date-day {
+  font-weight: 700;
+  font-size: 1.75rem;
+}
 .listing-card .thumb .thumb-overlay .date {
   background-color: var(--bs-primary);
   padding: 0.5rem 1rem;
@@ -196,10 +217,18 @@
   color: var(--bs-primary);
   margin-bottom: 1rem;
 }
+.causeway-single-listing .subtext {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
 .causeway-single-listing .sub-heading {
   font-weight: 600;
   font-size: 1.75rem;
   color: var(--bs-primary);
+}
+.causeway-single-listing .the-content {
+  font-size: 1.25rem;
+  line-height: 2rem;
 }
 .causeway-single-listing .the-content p {
   font-size: 1.25rem;
@@ -282,6 +311,35 @@
 .causeway-single-listing .sidebar .links-list li a {
   padding: 0;
   color: inherit;
+}
+.causeway-single-listing .sidebar .occurrences .dates-list {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.causeway-single-listing .sidebar .occurrences .dates-list .date-item {
+  display: inline-block;
+  background-color: #666;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 50rem;
+}
+.causeway-single-listing .sidebar .occurrences .dates-list .date-item.next {
+  background-color: var(--bs-primary);
+}
+.causeway-single-listing .sidebar .occurrences .dates-list .dates-more {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.causeway-single-listing .sidebar .occurrences .dates-toggle {
+  background: none;
+  border: none;
+  color: var(--bs-primary);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.5rem 0;
+  text-decoration: underline;
 }
 .causeway-single-listing .trip-advisor {
   display: block;
