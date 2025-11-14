@@ -1089,16 +1089,40 @@ class Causeway_Importer
             // ②  Derive and store occurrences + next upcoming
             [$rows, $next] = self::build_occurrences_for_acf($dates);
 
+            // if last row in rows end date is in future do not do the skip below
+
             // If there are occurrences but no upcoming next, mark listing as stale and skip it
+            // However, if the last occurrence's END time is still in the future, treat it as active (ongoing) and do NOT skip.
             if (!empty($rows) && empty($next)) {
-                self::log("⏭️ Skipping stale listing (no upcoming occurrences): {$post_title} (Causeway ID: {$causeway_id}, WP ID: {$post_id})");
-                // Do NOT add this causeway_id to $imported_ids so delete_old_listings() will purge it
-                // Proceed to next item after updating progress counters
-                self::$processed_listings++;
-                if (self::$processed_listings % 10 === 0 || self::$processed_listings === self::$total_listings) {
-                    self::update_status();
+                $last_row = end($rows);
+                $last_end_future = false;
+                if (!empty($last_row['occurrence_end'])) {
+                    try {
+                        $tz = new \DateTimeZone('UTC');
+                        $last_end = Carbon::createFromFormat('Y-m-d H:i:s', $last_row['occurrence_end'], $tz);
+                        if ($last_end && $last_end->greaterThanOrEqualTo(Carbon::now($tz))) {
+                            $last_end_future = true; // ongoing occurrence
+                        }
+                    } catch (\Exception $e) {
+                        // Silently ignore parse errors; will fallback to stale logic
+                    }
                 }
-                continue;
+                // Reset internal array pointer after end() usage (good practice if $rows reused later)
+                reset($rows);
+
+                if (!$last_end_future) {
+                    self::log("⏭️ Skipping stale listing (no upcoming occurrences): {$post_title} (Causeway ID: {$causeway_id}, WP ID: {$post_id})");
+                    // Do NOT add this causeway_id to $imported_ids so delete_old_listings() will purge it
+                    // Proceed to next item after updating progress counters
+                    self::$processed_listings++;
+                    if (self::$processed_listings % 10 === 0 || self::$processed_listings === self::$total_listings) {
+                        self::update_status();
+                    }
+                    // $imported_ids[] = $causeway_id; // NOTE: Existing behavior retained (comment suggests exclusion)
+                    continue;
+                } else {
+                    self::log("ℹ️ Listing considered active: last occurrence end still in future despite no upcoming start (Causeway ID: {$causeway_id}, WP ID: {$post_id})");
+                }
             }
 
             update_field('all_occurrences', $rows, $post_id);     // repeater
