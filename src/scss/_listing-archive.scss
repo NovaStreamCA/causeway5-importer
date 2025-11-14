@@ -22,7 +22,7 @@
                     211);
             transition: all .5s;
 
-            &:not(.mixitup-control-disabled) {
+            &:not(.mixitup-control-disabled):not(.mixitup-control-truncation-marker) {
                 &:hover {
                     background-color: var(--bs-primary);
                     color: #FFF;

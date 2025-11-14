@@ -45,7 +45,7 @@
   border: 1px solid rgb(207, 210, 211);
   transition: all 0.5s;
 }
-.causeway-listings-section .causeway-page-list .mixitup-control:not(.mixitup-control-disabled):hover {
+.causeway-listings-section .causeway-page-list .mixitup-control:not(.mixitup-control-disabled):not(.mixitup-control-truncation-marker):hover {
   background-color: var(--bs-primary);
   color: #FFF;
 }
