@@ -140,7 +140,9 @@ while (have_posts()) : the_post();
             <div class="content-main">
 
                 <!-- Trip Advisor -->
-                 <?php if()
+                <!-- <?php if($tripadvisor_rating_url): ?>
+
+                <?php endif; ?> -->
 
                 <p class="sub-heading">About</p>
 
