@@ -283,6 +283,36 @@
   padding: 0;
   color: inherit;
 }
+.causeway-single-listing .trip-advisor {
+  display: block;
+  text-decoration: none;
+  color: inherit !important;
+  padding: 1.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.175);
+  border-radius: 1.25rem;
+  margin-bottom: 1rem;
+}
+.causeway-single-listing .trip-advisor p {
+  margin-bottom: 0;
+}
+.causeway-single-listing .trip-advisor .rating {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.causeway-single-listing .trip-advisor .text {
+  margin-bottom: 0.25rem !important;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--bs-primary);
+}
+.causeway-single-listing .trip-advisor .rating-svg {
+  margin-left: -8px;
+}
+.causeway-single-listing .trip-advisor .rating-text {
+  color: inherit !important;
+}
 
 .listing-meta {
   display: flex;
@@ -349,7 +379,7 @@
 .content-layout {
   display: grid;
   grid-template-columns: 1.7fr 1fr;
-  gap: 32px;
+  gap: 3rem;
   align-items: start;
 }
 
@@ -394,16 +424,22 @@
 .gallery-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 .gallery-grid figure {
   margin: 0;
+  overflow: hidden;
+  border-radius: 8px;
 }
 .gallery-grid img {
   width: 100%;
   height: 160px;
   object-fit: cover;
   border-radius: 8px;
+  transition: all 0.5s;
+}
+.gallery-grid img:hover {
+  transform: scale(1.05);
 }
 
 .occurrences {

@@ -128,6 +128,42 @@
             }
         }
     }
+
+    .trip-advisor {
+        display: block;
+        text-decoration: none;
+        color: inherit !important;
+        padding: 1.5rem;
+        border: 1px solid rgba(0, 0, 0, 0.175);
+        border-radius: 1.25rem;
+        margin-bottom: 1rem;
+
+        p {
+            margin-bottom: 0;
+        }
+
+        .rating {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .5rem;
+        }
+
+        .text {
+            margin-bottom: .25rem !important;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--bs-primary);
+        }
+
+        .rating-svg {
+            margin-left: -8px;
+        }
+
+        .rating-text {
+            color: inherit !important;
+        }
+    }
 }
 
 .listing-meta {
@@ -207,7 +243,7 @@
     display: grid;
     // grid-template-columns: 2fr 1fr;
     grid-template-columns: 1.7fr 1fr;
-    gap: 32px;
+    gap: 3rem;
     align-items: start;
 }
 
@@ -254,10 +290,12 @@
 .gallery-grid {
     display: grid;
     gap: 12px;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 
     figure {
         margin: 0;
+        overflow: hidden;
+        border-radius: $radius;
     }
 
     img {
@@ -265,6 +303,11 @@
         height: 160px;
         object-fit: cover;
         border-radius: $radius;
+        transition: all .5s;
+
+        &:hover {
+            transform: scale(1.05);
+        }
     }
 }
 

@@ -28,6 +28,7 @@ while (have_posts()) : the_post();
     $tripadvisor_rating_url = get_field('tripadvisor_rating_url', $post_id);
     $tripadvisor_url = get_field('tripadvisor_url', $post_id);
     $tripadvisor_rating = get_field('tripadvisor_rating', $post_id);
+    $tripadvisor_count = get_field('tripadvisor_count', $post_id);
 
     $general_site  = null;
     $social_sites  = [];
@@ -117,18 +118,18 @@ while (have_posts()) : the_post();
         <div class="hero hero-layout <?php if(empty($attachments[1]['url'])) echo 'single-image'; ?>">
             <div class="main-image">
                 <?php if(!empty($attachments[0]['url'])): ?>
-                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[0]['url']); ?>" data-spotlight="listing-gallery" href="<?php echo esc_url($attachments[0]['url']); ?>">
+                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[0]['url']); ?>" data-spotlight="listing-gallery">
                     <img src="<?php echo esc_url($attachments[0]['url']); ?>" alt="Listing Image">
                 </a>
                 <?php endif; ?>
             </div>
             <?php if(!empty($attachments[1]['url'])): ?>
             <div class="secondary-image">
-                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[1]['url']); ?>" data-spotlight="listing-gallery" href="<?php echo esc_url($attachments[1]['url']); ?>">
+                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[1]['url']); ?>" data-spotlight="listing-gallery">
                     <img src="<?php echo esc_url($attachments[1]['url']); ?>" alt="Listing Image">
                 </a>
                 <?php if(!empty($attachments[2]['url'])): ?>
-                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[2]['url']); ?>" data-spotlight="listing-gallery" href="<?php echo esc_url($attachments[2]['url']); ?>">
+                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[2]['url']); ?>" data-spotlight="listing-gallery">
                     <img src="<?php echo esc_url($attachments[2]['url']); ?>" alt="Listing Image">
                 </a>
                 <?php endif; ?>
@@ -140,9 +141,15 @@ while (have_posts()) : the_post();
             <div class="content-main">
 
                 <!-- Trip Advisor -->
-                <!-- <?php if($tripadvisor_rating_url): ?>
-
-                <?php endif; ?> -->
+                <?php if($tripadvisor_rating_url): ?>
+                    <a href="<?php echo $tripadvisor_url ?>" target="_blank" class="trip-advisor">
+                        <p class='text'>TripAdvisor Traveler Rating</p>
+                        <div class='rating'>
+                            <img class='rating-svg' src="<?php echo $tripadvisor_rating_url; ?>">
+                            <p class='rating-text'>Based on <?php echo $tripadvisor_count; ?> reviews</p>
+                        </div>
+                    </a>
+                <?php endif; ?>
 
                 <p class="sub-heading">About</p>
 
@@ -348,6 +355,7 @@ while (have_posts()) : the_post();
         </div>
 
         <?php
+        // TODO
         // Related listings grid
         $related = get_field('related_listings', $post_id) ?: [];
         if (!empty($related)) :
