@@ -47,7 +47,17 @@ class Causeway_Listings_Loop {
             if ($cols < 1) { $cols = 1; }
             if ($cols > 6) { $cols = 6; }
             $cols_class = 'cols-' . $cols;
-            echo '<div class="causeway-listings-grid ' . esc_attr($cols_class) . '">';
+            // Optional data-* attributes for JS (e.g., pagination limit)
+            $data_attrs = '';
+            if (!empty($args['data']) && is_array($args['data'])) {
+                foreach ($args['data'] as $k => $v) {
+                    if ($k === '' || $v === null) continue;
+                    $attr_name = 'data-' . sanitize_key((string)$k);
+                    $attr_val  = esc_attr((string)$v);
+                    $data_attrs .= ' ' . $attr_name . '="' . $attr_val . '"';
+                }
+            }
+            echo '<div class="causeway-listings-grid ' . esc_attr($cols_class) . '"' . $data_attrs . '>';
             while ($q->have_posts()) { $q->the_post();
                 self::include_template_part('listing-card.php');
             }

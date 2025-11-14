@@ -13,10 +13,12 @@
         }
 
         // Initialize MixItUp
-        var mixer = mixitup(grid, {
+        var limitAttr = parseInt(grid.getAttribute('data-page-limit') || '0', 10);
+        var hasPagination = !isNaN(limitAttr) && limitAttr > 0;
+        var mixConfig = {
             selectors: { target: '.listing-card' },
-            controls: { scope: 'local', live: true },
-            animation: { enable: true, effects: 'fade scale(0.98)', duration: 220 },
+            controls: { scope: hasPagination ? 'global' : 'local', live: true },
+            animation: { enable: false, effects: 'fade scale(0.98)', duration: 220 },
             callbacks: {
                 onMixStart: function (state) {
                     console.log('[MixItUp] #' + sectionId + ' mixStart', { totalShow: state.totalShow, activeFilter: state.activeFilter });
@@ -25,7 +27,11 @@
                     console.log('[MixItUp] #' + sectionId + ' mixEnd', { totalShow: state.totalShow, activeFilter: state.activeFilter });
                 }
             }
-        });
+        };
+        if (hasPagination) {
+            mixConfig.pagination = { limit: limitAttr };
+        }
+        var mixer = mixitup(grid, mixConfig);
         console.log('[MixItUp] initialized for section #' + sectionId, mixer);
 
         // Controls: search + selects

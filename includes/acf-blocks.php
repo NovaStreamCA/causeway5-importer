@@ -98,6 +98,25 @@ class Causeway_ACF_Blocks {
                         'default_value' => 0,
                     ],
                     [
+                        'key' => 'field_causeway_listings_per_page',
+                        'label' => 'Items Per Page',
+                        'name' => 'per_page',
+                        'type' => 'number',
+                        'default_value' => 6,
+                        'min' => 1,
+                        'max' => 60,
+                        'instructions' => 'Client-side pagination page size (MixItUp).',
+                        'conditional_logic' => [
+                            [
+                                [
+                                    'field' => 'field_causeway_listings_pagination',
+                                    'operator' => '==',
+                                    'value' => 1,
+                                ],
+                            ],
+                        ],
+                    ],
+                    [
                         'key' => 'field_causeway_listings_show_filterbar',
                         'label' => 'Show Filterbar',
                         'name' => 'show_filterbar',
@@ -135,13 +154,14 @@ class Causeway_ACF_Blocks {
         }
         $orderby     = get_field('orderby') ?: 'date';
         $order       = get_field('order') ?: 'DESC';
-        $pagination  = (bool) get_field('show_pagination');
+    $pagination  = (bool) get_field('show_pagination');
+    $per_page    = (int) (get_field('per_page') ?: 0);
         $show_filter = (bool) get_field('show_filterbar');
 
         // Wrap filterbar + grid for scoped controls
         echo '<div class="causeway-listings-section">';
 
-        // Optional filterbar
+    // Optional filterbar
         if ($show_filter) {
             $basename   = 'listings-filterbar.php';
             $candidates = [
@@ -158,15 +178,24 @@ class Causeway_ACF_Blocks {
             }
         }
 
+        // Page list is rendered inside the grid container when pagination is enabled
+
         $html = Causeway_Listings_Loop::render([
             'count' => $count,
             'columns' => $columns,
             'type' => $type,
             'orderby' => $orderby,
             'order' => $order,
-            'show_pagination' => $pagination,
+            // Disable server-side pagination when JS pagination is enabled
+            'show_pagination' => false,
+            'data' => $pagination ? ['page-limit' => (int)($per_page > 0 ? $per_page : $count)] : [],
         ]);
         echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+
+        // Render MixItUp page list outside of the grid when enabled
+        if ($pagination) {
+            echo '<div class="mixitup-page-list"></div>';
+        }
 
         echo '</div>'; // .causeway-listings-section
     }
