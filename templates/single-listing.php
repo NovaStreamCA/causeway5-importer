@@ -3,6 +3,9 @@
  * Single template for Causeway Listing (post type: listing)
  *
  * Themes can override by copying this file to: your-theme/single-listing.php
+ *
+ * Spotlight lightbox integration: images wrapped in anchors with data-spotlight="listing-gallery".
+ * Script enqueued conditionally in plugin (see causeway.php). Remove or adjust group name to customize.
  */
 
 if (!defined('ABSPATH')) { exit; }
@@ -22,6 +25,10 @@ while (have_posts()) : the_post();
     $phone_off     = get_field('phone_offseason', $post_id);
     $phone_toll    = get_field('phone_tollfree', $post_id);
     $websites      = get_field('websites', $post_id) ?: [];
+    $tripadvisor_rating_url = get_field('tripadvisor_rating_url', $post_id);
+    $tripadvisor_url = get_field('tripadvisor_url', $post_id);
+    $tripadvisor_rating = get_field('tripadvisor_rating', $post_id);
+
     $general_site  = null;
     $social_sites  = [];
     if (!empty($websites) && is_array($websites)) {
@@ -109,13 +116,21 @@ while (have_posts()) : the_post();
         <!-- Hero media -->
         <div class="hero hero-layout <?php if(empty($attachments[1]['url'])) echo 'single-image'; ?>">
             <div class="main-image">
-                <img src="<?php echo esc_url($attachments[0]['url']) ?>" alt="Listing Image">
+                <?php if(!empty($attachments[0]['url'])): ?>
+                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[0]['url']); ?>" data-spotlight="listing-gallery" href="<?php echo esc_url($attachments[0]['url']); ?>">
+                    <img src="<?php echo esc_url($attachments[0]['url']); ?>" alt="Listing Image">
+                </a>
+                <?php endif; ?>
             </div>
             <?php if(!empty($attachments[1]['url'])): ?>
             <div class="secondary-image">
-                <img src="<?php echo esc_url($attachments[1]['url']) ?>" alt="Listing Image">
+                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[1]['url']); ?>" data-spotlight="listing-gallery" href="<?php echo esc_url($attachments[1]['url']); ?>">
+                    <img src="<?php echo esc_url($attachments[1]['url']); ?>" alt="Listing Image">
+                </a>
                 <?php if(!empty($attachments[2]['url'])): ?>
-                <img src="<?php echo esc_url($attachments[2]['url']) ?>" alt="Listing Image">
+                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[2]['url']); ?>" data-spotlight="listing-gallery" href="<?php echo esc_url($attachments[2]['url']); ?>">
+                    <img src="<?php echo esc_url($attachments[2]['url']); ?>" alt="Listing Image">
+                </a>
                 <?php endif; ?>
             </div>
             <?php endif; ?>
@@ -123,6 +138,10 @@ while (have_posts()) : the_post();
 
         <div class="entry-content content-layout">
             <div class="content-main">
+
+                <!-- Trip Advisor -->
+                 <?php if()
+
                 <p class="sub-heading">About</p>
 
                 <div class="the-content">
@@ -131,12 +150,14 @@ while (have_posts()) : the_post();
 
                 <?php if (!empty($attachments) && count($attachments) > 1) : ?>
                     <section class="gallery">
-                        <h2>Gallery</h2>
+                        <p class="sub-heading" style='padding-top:1rem;'>Gallery</p>
                         <div class="gallery-grid">
                             <?php foreach ($attachments as $i => $att) : if (empty($att['url'])) continue; ?>
                                 <?php if ($i === 0) continue; // skip hero already shown ?>
                                 <figure>
+                                    <a href="<?php echo esc_url($att['url']); ?>" class='spotlight'>
                                     <img src="<?php echo esc_url($att['url']); ?>" alt="<?php echo esc_attr($att['alt'] ?? ''); ?>" />
+                                    </a>
                                 </figure>
                             <?php endforeach; ?>
                         </div>

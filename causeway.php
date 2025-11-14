@@ -547,6 +547,17 @@ add_action('wp_enqueue_scripts', function () {
     if ($is_listing_screen || has_block('acf/causeway-listings-grid') || is_page()) {
         wp_enqueue_style('causeway-listings', plugin_dir_url(__FILE__) . 'assets/css/causeway.css', [], '1.0.0');
     }
+    // Spotlight lightbox (only needed on single listing where hero/gallery images exist)
+    if (is_singular('listing')) {
+        wp_register_script(
+            'spotlight',
+            'https://rawcdn.githack.com/nextapps-de/spotlight/0.7.8/dist/spotlight.bundle.js',
+            [],
+            '0.7.8',
+            true
+        );
+        wp_enqueue_script('spotlight');
+    }
 });
 
 // Editor styles (block editor) for listing block previews
