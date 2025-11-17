@@ -255,6 +255,14 @@
     align-items: start;
     margin-bottom: 2rem;
 
+    @media (max-width: 992px) {
+        grid-template-columns: 1fr !important;
+
+        .secondary-image {
+            display: none !important;
+        }
+    }
+
     &.single-image {
         grid-template-columns: 1fr;
     }
@@ -315,6 +323,10 @@
     grid-template-columns: 1.7fr 1fr;
     gap: 3rem;
     align-items: start;
+
+    @media (max-width: 992px) {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: $bp-md) {
@@ -361,6 +373,13 @@
     display: grid;
     gap: 12px;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+
+    @media (max-width: 768px) {
+        img {
+            height: auto !important;
+            aspect-ratio: 16/9;
+        }
+    }
 
     figure {
         margin: 0;
