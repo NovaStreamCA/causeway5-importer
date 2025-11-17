@@ -34,17 +34,34 @@ $nextDate = get_field('next_occurrence', $post_id);
 $price = get_field('price', $post_id);
 $nextMonth = '';
 $nextDay  = '';
-if (!empty($nextDate)) {
+// Determine if this listing is an event (has occurrences/next_occurrence)
+$occurrences = get_field('all_occurrences', $post_id);
+// Event determination: listing-type taxonomy slug exactly 'event' OR contains 'event'
+$is_event = false; $type_slugs = [];
+if (!is_wp_error($types) && !empty($types)) {
+    foreach ($types as $t) {
+        if (!empty($t->slug)) { $type_slugs[] = $t->slug; }
+        if (isset($t->slug)) {
+            $slug_l = strtolower($t->slug);
+            if ($slug_l === 'event' || strpos($slug_l, 'event') !== false) { $is_event = true; }
+        }
+    }
+}
+
+// Compute a numeric sort key for the next occurrence (unix timestamp, 10 digits)
+$sortNextTs = 9999999999; // default far-future value so non-events group after events and fall back to title
+if ($is_event && !empty($nextDate)) {
     $dt = causeway_parse_occ_dt($nextDate);
     if ($dt instanceof DateTime) {
         $tz = wp_timezone();
         $ts = $dt->getTimestamp();
         $nextMonth = wp_date('M', $ts, $tz);   // e.g., Nov, Dec
         $nextDay  = wp_date('j', $ts, $tz); // e.g., 4, 23
+        $sortNextTs = $ts;
     }
 }
 ?>
-<article <?php post_class('listing-card' . $filter_classes . $cat_classes); ?> data-title="<?php echo esc_attr($title_attr); ?>">
+<article <?php post_class('listing-card' . $filter_classes . $cat_classes); ?> data-title="<?php echo esc_attr($title_attr); ?>" data-event="<?php echo $is_event ? '1' : '0'; ?>" data-next="<?php echo (string)(int)$sortNextTs; ?>" data-types="<?php echo esc_attr(implode(',', $type_slugs)); ?>">
     <a href="<?php echo esc_url(get_permalink()); ?>" class="thumb">
         <?php if (has_post_thumbnail()) {
             the_post_thumbnail('medium_large');
@@ -87,7 +104,6 @@ if (!empty($nextDate)) {
         <!-- First Start/Last End -->
         <?php
         // Data is guaranteed sorted at import; use first start and last end directly.
-        $occurrences = get_field('all_occurrences', $post_id);
         if (is_array($occurrences) && !empty($occurrences)) {
             $first = reset($occurrences);
             $last  = end($occurrences);

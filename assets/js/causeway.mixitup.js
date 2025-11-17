@@ -19,20 +19,23 @@
             selectors: { target: '.listing-card', pageList: '.causeway-page-list' },
             controls: { scope: hasPagination ? 'global' : 'local', live: true },
             animation: { enable: false, effects: 'fade scale(0.98)', duration: 220 },
+            // Use attribute names without the `data-` prefix per MixItUp docs
+            load: { sort: 'event:desc next:asc title:asc' },
             callbacks: {
-                onMixStart: function (state) {
-                    console.log('[MixItUp] #' + sectionId + ' mixStart', { totalShow: state.totalShow, activeFilter: state.activeFilter });
-                },
-                onMixEnd: function (state) {
-                    console.log('[MixItUp] #' + sectionId + ' mixEnd', { totalShow: state.totalShow, activeFilter: state.activeFilter });
-                }
+                onMixStart: function () { },
+                onMixEnd: function () { }
             }
         };
         if (hasPagination) {
             mixConfig.pagination = { limit: limitAttr };
         }
         var mixer = mixitup(grid, mixConfig);
-        console.log('[MixItUp] initialized for section #' + sectionId, mixer);
+        // Explicit sort after init to ensure multi-criteria applied (some builds ignore load.sort with live controls)
+        try {
+            setTimeout(function () {
+                mixer.sort('event:desc next:asc title:asc');
+            }, 0);
+        } catch (e) { console.warn('[MixItUp] sort invocation failed', e); }
 
         // Controls: search + selects
         var searchInput = root.querySelector('[data-role="search"]');
@@ -66,23 +69,17 @@
             if (c) parts.push('.cat-' + c);
             if (q) parts.push('[data-title*="' + cssEscapeAttr(q) + '"]');
             var selector = parts.length ? parts.join('') : 'all';
-            console.log('[MixItUp] #' + sectionId + ' applyFilter -> selector', selector);
             try {
                 mixer.filter(selector);
             } catch (err) {
-                console.error('[MixItUp] #' + sectionId + ' filter error', err);
+                console.warn('[MixItUp] filter error', err);
             }
         }
 
         var tId;
-        function onSearch() {
-            state.query = normalize(searchInput ? searchInput.value : '');
-            clearTimeout(tId);
-            console.log('[MixItUp] #' + sectionId + ' onSearch', state.query);
-            tId = setTimeout(applyFilter, 160);
-        }
-        function onType() { state.type = normalize(typeSelect ? typeSelect.value : ''); console.log('[MixItUp] #' + sectionId + ' onType', state.type); applyFilter(); }
-        function onCat() { state.cat = normalize(catSelect ? catSelect.value : ''); console.log('[MixItUp] #' + sectionId + ' onCat', state.cat); applyFilter(); }
+        function onSearch() { state.query = normalize(searchInput ? searchInput.value : ''); clearTimeout(tId); tId = setTimeout(applyFilter, 160); }
+        function onType() { state.type = normalize(typeSelect ? typeSelect.value : ''); applyFilter(); }
+        function onCat() { state.cat = normalize(catSelect ? catSelect.value : ''); applyFilter(); }
 
         if (searchInput) searchInput.addEventListener('input', onSearch);
         if (typeSelect) typeSelect.addEventListener('change', onType);
@@ -90,11 +87,8 @@
 
         // Expose for debugging
         root.__mixer = mixer;
-        try {
-            var items = root.querySelectorAll('.listing-card');
-            var first = items[0];
-            console.log('[MixItUp] #' + sectionId + ' snapshot', { total: items.length, sampleTitle: first ? readTitle(first) : null, sampleClasses: first ? first.className : null });
-        } catch (e) { }
+        // Minimal exposure for potential manual debugging (no console spam)
+        root.__mixer = mixer;
     }
 
     function initAll() {

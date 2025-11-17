@@ -133,6 +133,23 @@ Notes:
 - `pagination` is maintained solely for backward compatibility and maps to client-side mode.
 - The filter bar template lookup mirrors the block (theme override paths: `causeway/listings-filterbar.php`, `listings-filterbar.php`, `template-parts/causeway/listings-filterbar.php`).
 
+## Client-side Sorting
+
+Listings grids use MixItUp for filtering and default sorting with the following priority:
+
+- Events first (listings whose listing-type taxonomy includes slug `event`).
+- Within events: nearest `next_occurrence` first.
+- All remaining listings: alphabetical A–Z by title.
+
+Implementation details:
+- Each card (`templates/listing-card.php`) includes data attributes:
+  - `data-event` — `1` for events (listing-type slug `event`), `0` otherwise.
+  - `data-next` — Unix timestamp (10 digits) for the next occurrence; non-events fall back to `9999999999`.
+  - `data-title` — lowercased title for search and A–Z sorting.
+- JS config (`assets/js/causeway.mixitup.js`) sets `load.sort` to `data-event:desc data-next:asc data-title:asc`.
+
+Themes overriding the card template should preserve these data attributes to keep sorting consistent.
+
 ## Assets & SCSS
 
 The plugin now supports authoring styles in SCSS while still distributing compiled CSS for WordPress to enqueue.
