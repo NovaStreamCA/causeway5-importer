@@ -27,6 +27,14 @@ class Causeway_Listings_Loop {
                 'terms'    => (array)$type,
             ];
         }
+        $category = $args['category'] ?? '';
+        if ($category) {
+            $defaults['tax_query'][] = [
+                'taxonomy' => 'listings-category',
+                'field'    => 'slug',
+                'terms'    => (array)$category,
+            ];
+        }
         if (empty($defaults['tax_query'])) {
             unset($defaults['tax_query']);
         }

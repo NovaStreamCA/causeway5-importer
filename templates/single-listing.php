@@ -140,6 +140,28 @@ while (have_posts()) : the_post();
         <div class="entry-content content-layout">
             <div class="content-main">
 
+                <!-- Dates -->
+                <?php
+                     if (is_array($occurrences) && !empty($occurrences)) {
+                        $first = reset($occurrences);
+                        $last  = end($occurrences);
+
+                        $first_dt = !empty($first['occurrence_start']) ? causeway_parse_occ_dt((string)$first['occurrence_start']) : null;
+                        $last_dt  = !empty($last['occurrence_end'])   ? causeway_parse_occ_dt((string)$last['occurrence_end'])   : null;
+
+                        if ($first_dt instanceof DateTime && $last_dt instanceof DateTime) {
+                            $tz = wp_timezone();
+                            $start_label = wp_date('M j', $first_dt->getTimestamp(), $tz);
+                            $end_label   = wp_date('M j', $last_dt->getTimestamp(), $tz);
+                            $range_label = ($start_label === $end_label) ? $start_label : ($start_label . ' - ' . $end_label);
+                            echo '<p class="dates-tagline"><svg width="24px" height="24px" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M19 4H18V2H16V4H8V2H6V4H5C3.89 4 3.01 4.9 3.01 6L3 20C3 21.1 3.89 22 5 22H19C20.1 22 21 21.1 21 20V6C21 4.9 20.1 4 19 4ZM19 20H5V10H19V20ZM19 8H5V6H19V8ZM9 14H7V12H9V14ZM13 14H11V12H13V14ZM17 14H15V12H17V14ZM9 18H7V16H9V18ZM13 18H11V16H13V18ZM17 18H15V16H17V18Z"/>
+                            </svg>
+                            ' . esc_html($range_label) . '</p>';
+                        }
+                    }
+                ?>
+
                 <!-- Price -->
                 <?php if(!empty($price)): ?>
                     <p class="subtext">From $<?php echo esc_html($price); ?></p>
@@ -338,7 +360,7 @@ while (have_posts()) : the_post();
                 <?php endif; ?>
 
                 <!-- Date List -->
-                 <?php if (!empty($occurrences)) : ?>
+                 <?php if (count($occurrences) > 1) : ?>
                     <section class="occurrences">
                         <p class="side-sub-heading">All Dates</p>
                         <div class='dates-list' id='<?php echo esc_attr("dates-list-" . $post_id); ?>'>
@@ -386,40 +408,39 @@ while (have_posts()) : the_post();
                 <?php endif; ?>
             </aside>
         </div>
-
-        <?php
-        // TODO
-        // Related listings grid
-        $related = get_field('related_listings', $post_id) ?: [];
-        if (!empty($related)) :
-            $rel_q = new WP_Query([
-                'post_type' => 'listing',
-                'post__in' => array_map('intval', $related),
-                'orderby' => 'post__in',
-                'posts_per_page' => 6,
-            ]);
-            if ($rel_q->have_posts()) : ?>
-                <section class="related-listings">
-                    <h2>Related Listings</h2>
-                    <div class="causeway-listings-grid cols-3">
-                        <?php while ($rel_q->have_posts()) : $rel_q->the_post(); ?>
-                            <article class="listing-card">
-                                <a href="<?php echo esc_url(get_permalink()); ?>" class="thumb">
-                                    <?php if (has_post_thumbnail()) { the_post_thumbnail('medium_large'); } ?>
-                                </a>
-                                <div class="body">
-                                    <h3 class="title"><a href="<?php echo esc_url(get_permalink()); ?>"><?php echo esc_html(get_the_title()); ?></a></h3>
-                                    <p class="excerpt">
-                                        <?php echo esc_html(wp_trim_words(get_the_excerpt() ?: wp_strip_all_tags(get_the_content()), 20)); ?>
-                                    </p>
-                                </div>
-                            </article>
-                        <?php endwhile; wp_reset_postdata(); ?>
-                    </div>
-                </section>
-            <?php endif; endif; ?>
     </article>
 </main>
+
+<?php
+// Related listings grid
+$related = get_field('related_listings', $post_id) ?: [];
+if (!empty($related)) :
+    $rel_q = new WP_Query([
+        'post_type' => 'listing',
+        'post__in' => array_map('intval', $related),
+        'orderby' => 'post__in',
+        'posts_per_page' => 6,
+    ]);
+    if ($rel_q->have_posts()) : ?>
+        <section class="related-listings extra-listings">
+            <p class="section-title">Related Listings</p>
+            <div class="causeway-listings-grid cols-3">
+                <?php while ($rel_q->have_posts()) : $rel_q->the_post(); ?>
+                    <article class="listing-card">
+                        <a href="<?php echo esc_url(get_permalink()); ?>" class="thumb">
+                            <?php if (has_post_thumbnail()) { the_post_thumbnail('medium_large'); } ?>
+                        </a>
+                        <div class="body">
+                            <h3 class="title"><a href="<?php echo esc_url(get_permalink()); ?>"><?php echo esc_html(get_the_title()); ?></a></h3>
+                            <p class="excerpt">
+                                <?php echo esc_html(wp_trim_words(get_the_excerpt() ?: wp_strip_all_tags(get_the_content()), 20)); ?>
+                            </p>
+                        </div>
+                    </article>
+                <?php endwhile; wp_reset_postdata(); ?>
+            </div>
+        </section>
+    <?php endif; endif; ?>
 
 <script>
     // Used for the show more/less toggle on date lists

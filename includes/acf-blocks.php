@@ -67,6 +67,19 @@ class Causeway_ACF_Blocks {
                         'instructions' => 'Select one or more listing types to filter. Overrides single slug above if used.',
                     ],
                     [
+                        'key' => 'field_causeway_listings_categories_multi',
+                        'label' => 'Listing Categories',
+                        'name' => 'categories',
+                        'type' => 'taxonomy',
+                        'taxonomy' => 'listings-category',
+                        'field_type' => 'multi_select',
+                        'add_term' => 0,
+                        'save_terms' => 0,
+                        'load_terms' => 0,
+                        'return_format' => 'id',
+                        'instructions' => 'Select one or more listing categories to filter.',
+                    ],
+                    [
                         'key' => 'field_causeway_listings_orderby',
                         'label' => 'Order By',
                         'name' => 'orderby',
@@ -157,6 +170,17 @@ class Causeway_ACF_Blocks {
     $pagination  = (bool) get_field('show_pagination');
     $per_page    = (int) (get_field('per_page') ?: 0);
         $show_filter = (bool) get_field('show_filterbar');
+        // Categories (listings-category) multi-select support
+        $categories   = '';
+        $cats_multi   = get_field('categories');
+        if (is_array($cats_multi) && !empty($cats_multi)) {
+            $cat_slugs = [];
+            foreach ($cats_multi as $term_id) {
+                $term = get_term($term_id, 'listings-category');
+                if ($term && !is_wp_error($term)) { $cat_slugs[] = $term->slug; }
+            }
+            if (!empty($cat_slugs)) { $categories = $cat_slugs; }
+        }
 
         // Wrap filterbar + grid for scoped controls
         echo '<div class="causeway-listings-section">';
@@ -188,6 +212,7 @@ class Causeway_ACF_Blocks {
             'order' => $order,
             // Disable server-side pagination when JS pagination is enabled
             'show_pagination' => false,
+            'category' => $categories,
             'data' => $pagination ? ['page-limit' => (int)($per_page > 0 ? $per_page : $count)] : [],
         ]);
         echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped

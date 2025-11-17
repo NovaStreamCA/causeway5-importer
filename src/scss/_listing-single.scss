@@ -20,6 +20,15 @@
         margin-bottom: .25rem;
     }
 
+    .dates-tagline {
+        font-size: 1rem;
+        color: var(--bs-primary);
+        margin-bottom: .25rem;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
     .sub-heading {
         font-weight: 600;
         font-size: 1.75rem;
@@ -207,6 +216,15 @@
         .rating-text {
             color: inherit !important;
         }
+    }
+}
+
+.extra-listings {
+
+    .section-title {
+        font-weight: 600;
+        font-size: 2rem;
+        color: var(--bs-primary);
     }
 }
 
