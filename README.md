@@ -100,6 +100,39 @@ Notes:
 - Editing of listings and Causeway taxonomies can be locked with the included `includes/disable-edit.php` (toggle its require in `causeway.php` if needed).
 - Keep ACF groups active; the plugin reads and writes many fields on posts and terms.
 
+## Listings Shortcode
+
+The shortcode `[causeway_listings]` renders the same listings grid as the ACF block (`Listings Grid`) and supports the block’s client-side pagination pattern.
+
+Attributes (parity with block fields):
+
+- `count`: Number of listings to fetch (default 6)
+- `columns`: Grid columns (1–6, default 3)
+- `type`: Single listing-type slug
+- `types`: Comma-separated listing-type slugs (overrides `type` when present)
+- `categories`: Comma-separated listings-category slugs
+- `orderby`: `date`, `title`, or `menu_order` (default `date`)
+- `order`: `ASC` or `DESC` (default `DESC`)
+- `show_pagination`: `true|false` enable client-side pagination (adds `data-page-limit` + page list container)
+- `per_page`: Page size for client-side pagination (defaults to `count` when omitted)
+- `show_filterbar`: `true|false` include the filter bar template above the grid
+
+Usage examples:
+
+```text
+[causeway_listings]
+[causeway_listings count="9" columns="3" orderby="title" order="ASC"]
+[causeway_listings types="event,festival" categories="music,food"]
+[causeway_listings show_filterbar="true" types="event"]
+[causeway_listings show_pagination="true" per_page="6" count="12"]
+```
+
+Notes:
+- Prefer `types` for multiple listing-type filters; `type` remains for single.
+- Client-side pagination only; server-side pagination has been removed.
+- `pagination` is maintained solely for backward compatibility and maps to client-side mode.
+- The filter bar template lookup mirrors the block (theme override paths: `causeway/listings-filterbar.php`, `listings-filterbar.php`, `template-parts/causeway/listings-filterbar.php`).
+
 ## Assets & SCSS
 
 The plugin now supports authoring styles in SCSS while still distributing compiled CSS for WordPress to enqueue.
