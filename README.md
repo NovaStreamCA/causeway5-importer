@@ -150,6 +150,32 @@ Implementation details:
 
 Themes overriding the card template should preserve these data attributes to keep sorting consistent.
 
+## Responsive Grid Behavior
+
+Listings grids adapt the number of columns based on viewport width while still respecting the user-defined column preference (`cols-1` … `cols-6`). The strategy is to CAP (not replace) higher column counts at narrower breakpoints so smaller declared values remain unchanged.
+
+Breakpoint capping (Bootstrap 5 ranges):
+- <576px (xs): Always 1 column.
+- 576px–767.98px (sm): Max 2 columns (declared 3–6 collapse to 2).
+- 768px–991.98px (md): Max 3 columns (declared 4–6 collapse to 3).
+- ≥992px (lg and up): Use the declared column count with no capping.
+
+Examples:
+- A grid with `cols-2` remains 2 columns from 576px upward; below 576px it becomes 1.
+- A grid with `cols-5` shows 1 (xs), 2 (sm), 3 (md), and 5 (lg+).
+
+Implementation details:
+- SCSS (`_listing-archive.scss`) defines the base repeat() declarations for `.cols-*` plus media queries that only target larger counts at smaller breakpoints.
+- Media query overrides use `!important` to ensure template/theme overrides don’t unintentionally prevent collapsing.
+- No JavaScript is required; behavior is purely CSS.
+
+Customization:
+- To change caps (e.g., allow 4 columns at md), adjust the corresponding media query selector group.
+- To opt-out for a specific grid, a theme can override the media queries later in the cascade with more specific selectors.
+
+Auto-fill mode:
+- Adding the class `auto-fill` uses `repeat(auto-fill, minmax(280px, 1fr))` for fluid wrapping; media query caps are not applied to this variant.
+
 ## Assets & SCSS
 
 The plugin now supports authoring styles in SCSS while still distributing compiled CSS for WordPress to enqueue.

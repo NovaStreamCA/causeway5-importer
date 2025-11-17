@@ -152,6 +152,35 @@
   grid-template-columns: repeat(6, 1fr);
 }
 
+@media (max-width: 575.98px) {
+  .causeway-listings-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+.causeway-listings-grid.cols-3,
+.causeway-listings-grid.cols-4,
+.causeway-listings-grid.cols-5,
+.causeway-listings-grid.cols-6 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 992px) {
+  .listing-grid-test-flag {
+    color: #123456;
+  }
+  .causeway-listings-grid.cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .causeway-listings-grid.cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .causeway-listings-grid.cols-5 {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  .causeway-listings-grid.cols-6 {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
 .listing-card {
   background: transparent;
   border: none;
@@ -295,6 +324,17 @@
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+}
+@media (max-width: 768px) {
+  .causeway-filterbar .filter-row {
+    flex-direction: row;
+  }
+  .causeway-filterbar .filter-row .cs-input-group,
+  .causeway-filterbar .filter-row select {
+    flex: 1 1 auto;
+    flex-shrink: 1 !important;
+    max-width: 100%;
+  }
 }
 .causeway-filterbar .filter-title {
   font-weight: 600;

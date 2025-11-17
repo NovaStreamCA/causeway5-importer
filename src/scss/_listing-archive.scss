@@ -135,6 +135,46 @@
     }
 }
 
+// Responsive column policy: Below 992px cap at 2 columns; phones (<576px) force single column.
+// Override higher column declarations with a mobile-first rule, then re-enable at ≥992px.
+@media (max-width: 575.98px) {
+    .causeway-listings-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+// Base override (applies to all widths <992px) – place after original @for loop.
+.causeway-listings-grid.cols-3,
+.causeway-listings-grid.cols-4,
+.causeway-listings-grid.cols-5,
+.causeway-listings-grid.cols-6 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 992px) {
+
+    // Test flag to verify compilation of new rules
+    .listing-grid-test-flag {
+        color: #123456;
+    }
+
+    .causeway-listings-grid.cols-3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .causeway-listings-grid.cols-4 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .causeway-listings-grid.cols-5 {
+        grid-template-columns: repeat(5, 1fr);
+    }
+
+    .causeway-listings-grid.cols-6 {
+        grid-template-columns: repeat(6, 1fr);
+    }
+}
+
 .listing-card {
     background: transparent;
     border: none;
@@ -297,6 +337,17 @@
         align-items: center;
         gap: 0.75rem;
         flex-wrap: wrap;
+
+        @media (max-width: 768px) {
+            flex-direction: row;
+
+            .cs-input-group,
+            select {
+                flex: 1 1 auto;
+                flex-shrink: 1 !important;
+                max-width: 100%;
+            }
+        }
     }
 
     .filter-title {
