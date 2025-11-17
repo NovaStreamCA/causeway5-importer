@@ -378,3 +378,27 @@
         }
     }
 }
+
+// Mobile pagination overflow handling
+@media (max-width: 420px) {
+    .causeway-listings-section .causeway-page-list {
+        flex-wrap: wrap;
+        row-gap: 6px;
+        padding: 0 4px;
+    }
+
+    .causeway-listings-section .causeway-page-list .mixitup-control {
+        width: 30px;
+        height: 30px;
+        font-size: .7rem;
+        margin: 2px;
+    }
+}
+
+@media (max-width: 340px) {
+    .causeway-listings-section .causeway-page-list .mixitup-control {
+        width: 26px;
+        height: 26px;
+        font-size: .65rem;
+    }
+}
