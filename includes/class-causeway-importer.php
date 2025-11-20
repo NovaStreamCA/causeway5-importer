@@ -1086,14 +1086,23 @@ class Causeway_Importer
             }
             update_field('dates', $dates, $post_id);
 
-            // ②  Derive and store occurrences + next upcoming
-            [$rows, $next] = self::build_occurrences_for_acf($dates);
+            // Determine if this listing is an Event (Causeway Type ID = 3)
+            $is_event_type = false;
+            foreach (($item['types'] ?? []) as $type_entry) {
+                if ((int)($type_entry['id'] ?? 0) === 3) {
+                    $is_event_type = true;
+                    break;
+                }
+            }
+
+            // ②  Derive and store occurrences + next upcoming (events get ALL occurrences; non-events limited to current year)
+            [$rows, $next] = self::build_occurrences_for_acf($dates, $is_event_type);
 
             // if last row in rows end date is in future do not do the skip below
 
-            // If there are occurrences but no upcoming next, mark listing as stale and skip it
+            // If there are occurrences but no upcoming next AND this is an event type, mark listing as stale and skip it
             // However, if the last occurrence's END time is still in the future, treat it as active (ongoing) and do NOT skip.
-            if (!empty($rows) && empty($next)) {
+            if ($is_event_type && !empty($rows) && empty($next)) {
                 $last_row = end($rows);
                 $last_end_future = false;
                 if (!empty($last_row['occurrence_end'])) {
@@ -1488,53 +1497,68 @@ class Causeway_Importer
      *
      * @return array [$rows, $nextString]
      */
-    private static function build_occurrences_for_acf(array $dates): array {
-        // $tz      = new DateTimeZone( get_option('timezone_string') ?: 'UTC' );
+    private static function build_occurrences_for_acf(array $dates, bool $is_event = false): array {
         $tz      = new DateTimeZone('UTC');
-        $year    = (int) Carbon::now($tz)->year;
-        $format = 'Y-m-d H:i:s';                     // original API format
+        $format  = 'Y-m-d H:i:s'; // incoming API format
         $rows    = [];
-        
 
-        // Collect every occurrence inside this calendar year
+        // For non-events, restrict to current calendar year; for events, include ALL occurrences
+        $year = (int) Carbon::now($tz)->year;
+        $range_start = Carbon::create($year,1,1,0,0,0,$tz);
+        $range_end   = Carbon::create($year,12,31,23,59,59,$tz);
+
         foreach ($dates as $entry) {
-
             $start = Carbon::createFromFormat($format, $entry['start_at'] ?? '', $tz);
             $end   = Carbon::createFromFormat($format, $entry['end_at']   ?? '', $tz);
-
             if (!$start || !$end) {
                 self::log('Invalid date: ' . json_encode($entry));
                 continue;
             }
 
-            $start->year($year);
-            $end  ->year($year);
+            // Derive duration (in minutes) without mutating year for events
             $duration = $end->diffInMinutes($start);
 
             if (!empty($entry['rrule'])) {
-                // Use RRULE as-is. Do NOT rewrite UNTIL, as that can make UNTIL < DTSTART and yield no occurrences.
-                // We still constrain results to the current calendar year via getOccurrencesBetween().
                 $rr = $entry['rrule'];
-                foreach ((new RRule($rr))->getOccurrencesBetween(
-                    Carbon::create($year,1,1,0,0,0,$tz),
-                    Carbon::create($year,12,31,23,59,59,$tz)
-                ) as $occ) {
-                    $rows[] = [
-                        'occurrence_start' => $occ->setTimezone($tz)->format('Y-m-d H:i:s'),
-                        'occurrence_end'   => $occ->modify("+{$duration} minutes")->setTimezone($tz)->format('Y-m-d H:i:s'),
-                    ];
+                $rrule = new RRule($rr);
+                if ($is_event) {
+                    // Get all occurrences as defined by RRULE (can be large)
+                    foreach ($rrule->getOccurrences() as $occ) {
+                        $rows[] = [
+                            'occurrence_start' => $occ->setTimezone($tz)->format('Y-m-d H:i:s'),
+                            'occurrence_end'   => $occ->modify("+{$duration} minutes")->setTimezone($tz)->format('Y-m-d H:i:s'),
+                        ];
+                    }
+                } else {
+                    // Constrain to single calendar year for non-event listings
+                    foreach ($rrule->getOccurrencesBetween($range_start, $range_end) as $occ) {
+                        $rows[] = [
+                            'occurrence_start' => $occ->setTimezone($tz)->format('Y-m-d H:i:s'),
+                            'occurrence_end'   => $occ->modify("+{$duration} minutes")->setTimezone($tz)->format('Y-m-d H:i:s'),
+                        ];
+                    }
                 }
             } else {
-                $rows[] = [
-                    'occurrence_start' => $start->format('Y-m-d H:i:s'),
-                    'occurrence_end'   => $end  ->format('Y-m-d H:i:s'),
-                ];
+                if ($is_event) {
+                    // Keep original start/end untouched
+                    $rows[] = [
+                        'occurrence_start' => $start->format('Y-m-d H:i:s'),
+                        'occurrence_end'   => $end->format('Y-m-d H:i:s'),
+                    ];
+                } else {
+                    // Force to current year (maintain original month/day/time)
+                    $start_clone = $start->copy()->year($year);
+                    $end_clone   = $end->copy()->year($year);
+                    $rows[] = [
+                        'occurrence_start' => $start_clone->format('Y-m-d H:i:s'),
+                        'occurrence_end'   => $end_clone->format('Y-m-d H:i:s'),
+                    ];
+                }
             }
         }
 
         usort($rows, fn($a,$b) => strcmp($a['occurrence_start'], $b['occurrence_start']));
 
-        // Pick the first one that’s still in the future
         $now  = Carbon::now($tz)->format('Y-m-d H:i:s');
         $next = null;
         foreach ($rows as $r) {
