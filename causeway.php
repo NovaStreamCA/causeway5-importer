@@ -137,19 +137,28 @@ add_action('admin_post_causeway_manual_import', function () {
         wp_die('Invalid nonce');
     }
 
-    // If an import is already running, block unless stale or in error
-    $status = get_option('causeway_import_status');
-    if (is_array($status) && !empty($status['running'])) {
-        $updated_at = isset($status['updated_at']) ? (int)$status['updated_at'] : 0;
-        $state = isset($status['state']) ? $status['state'] : '';
-        $is_stale = $updated_at > 0 ? (time() - $updated_at) > 8 * 60 : false; // 8-minute watchdog
-        $is_error = ($state === 'error');
-        if (!$is_stale && !$is_error) {
+    // Atomic lock using transient to prevent race conditions
+    // Check if lock already exists
+    $existing_lock = get_transient('causeway_import_lock');
+    
+    if ($existing_lock !== false) {
+        // Lock already exists - check if it's stale
+        $is_stale = (time() - $existing_lock) > (25 * MINUTE_IN_SECONDS); // 25-min stale threshold
+        
+        if ($is_stale) {
+            // Force-release stale lock and acquire new one
+            delete_transient('causeway_import_lock');
+            set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
+            error_log('[Causeway] Released stale import lock and re-acquired');
+        } else {
+            // Lock is active, block this request
+            error_log('[Causeway] Import blocked: another import is already running');
             wp_redirect(add_query_arg('import_running', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
             exit;
-        } else {
-            error_log('[Causeway] Overriding running lock due to ' . ($is_error ? 'error' : 'stale') . ' status.');
         }
+    } else {
+        // No lock exists, acquire it
+        set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
     }
 
     // Optimistically mark status as queued/running to prevent double-clicks
@@ -255,7 +264,11 @@ add_action('admin_post_causeway_manual_import_reset', function () {
         'cancel_requested' => false,
     ];
     update_option('causeway_import_status', $defaults, false);
-    error_log('[Causeway] Import status reset by admin');
+    
+    // Also release the import lock
+    delete_transient('causeway_import_lock');
+    error_log('[Causeway] Import status reset by admin and lock released');
+    
     wp_redirect(add_query_arg('import_reset', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
     exit;
 });
@@ -351,6 +364,17 @@ add_action('causeway_clear_cron_hook', 'clear_causeway_status');
 function run_causeway_import_export()
 {
     error_log('🕑 Running Causeway import/export via cron @ ' . date('Y-m-d H:i:s'));
+    
+    // Check if another import is already running
+    $existing_lock = get_transient('causeway_import_lock');
+    if ($existing_lock !== false) {
+        error_log('[Causeway] Cron import skipped: another import is already running');
+        return;
+    }
+    
+    // Acquire lock with 30-minute timeout
+    set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
+    
     if (class_exists('Causeway_Importer')) {
         try {
             Causeway_Importer::import();
@@ -364,6 +388,10 @@ function run_causeway_import_export()
             $status['error_message'] = $e->getMessage();
             $status['updated_at'] = time();
             update_option('causeway_import_status', $status, false);
+            
+            // Release lock on error
+            delete_transient('causeway_import_lock');
+            error_log('[Causeway] Released import lock after error');
         }
     }
 }
@@ -391,6 +419,9 @@ function clear_causeway_status()
     $status['percent'] = 0;
     $status['state'] = 'idle';
     update_option('causeway_import_status', $status, false);
+    
+    // Release import lock if it exists
+    delete_transient('causeway_import_lock');
 }
 
 /**

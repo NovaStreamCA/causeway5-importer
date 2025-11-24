@@ -76,6 +76,10 @@ class Causeway_Importer
                 'error_message' => $msg,
             ]);
             error_log('[Causeway] Import shutdown handler captured error: ' . $msg);
+            
+            // Release the import lock on error
+            delete_transient('causeway_import_lock');
+            self::log('🔓 Released import lock after error');
         }
     }
 
@@ -157,6 +161,10 @@ class Causeway_Importer
 
         wp_defer_term_counting(false);
         wp_suspend_cache_addition(false);
+        
+        // Release the import lock
+        delete_transient('causeway_import_lock');
+        self::log('🔓 Released import lock');
     }
 
     public static function export() {
