@@ -937,6 +937,26 @@ class Causeway_Importer
             self::log("🔎 Applied filters: areas=" . json_encode($area_causeway_ids) . ", communities=" . json_encode($community_causeway_ids) . " | kept {$post_count}/{$pre_count}");
         }
 
+        // Deduplicate payload by Causeway ID to prevent double-processing in a single run
+        $pre_dedupe = is_array($listings) ? count($listings) : 0;
+        $seen_payload_ids = [];
+        $deduped = [];
+        foreach ($listings as $it) {
+            $cid = isset($it['id']) ? (int)$it['id'] : 0;
+            if ($cid === 0) { $deduped[] = $it; continue; }
+            if (isset($seen_payload_ids[$cid])) {
+                self::log('🔁 Duplicate listing in payload detected, keeping first: ID ' . $cid . ' slug ' . ($it['slug'] ?? ''));
+                continue;
+            }
+            $seen_payload_ids[$cid] = true;
+            $deduped[] = $it;
+        }
+        $listings = $deduped;
+        $post_dedupe = count($listings);
+        if ($post_dedupe !== $pre_dedupe) {
+            self::log('🧹 Dedupe trimmed payload from ' . $pre_dedupe . ' to ' . $post_dedupe . ' listings');
+        }
+
     $listings_count = is_array($listings) ? count($listings) : 0;
     self::$total_listings = $listings_count;
     self::set_phase('listings_fetch');
@@ -944,6 +964,7 @@ class Causeway_Importer
     self::update_status(['total' => self::$total_listings]);
 
     self::set_phase('listings_process');
+        $seen_causeway_ids = [];
         foreach ($listings as $item) {
             $post_title = $item['name'] ?? '';
             $slug = $item['slug'] ?? '';
@@ -957,6 +978,13 @@ class Causeway_Importer
                 continue;
             }
 
+            // Skip if we've already processed this Causeway ID in this run
+            if (isset($seen_causeway_ids[(int)$causeway_id])) {
+                self::log("🔁 Skipping duplicate in this run: {$post_title} (Causeway ID: {$causeway_id})");
+                continue;
+            }
+            $seen_causeway_ids[(int)$causeway_id] = true;
+
             // Check if post already exists by causeway_id
             $existing = get_posts([
                 'post_type'  => 'listing',
@@ -969,6 +997,20 @@ class Causeway_Importer
 
             if (!empty($existing)) {
                 $post_id = $existing[0];
+            }
+
+            // Secondary check by slug in case causeway_id meta not yet set (prevents duplicates within one run)
+            if (!$post_id && !empty($slug)) {
+                $by_slug = get_posts([
+                    'post_type'   => 'listing',
+                    'name'        => $slug,
+                    'numberposts' => 1,
+                    'fields'      => 'ids',
+                    'lang'        => 'en',
+                ]);
+                if (!empty($by_slug)) {
+                    $post_id = $by_slug[0];
+                }
             }
 
             if (!$post_id) {
@@ -1199,6 +1241,9 @@ class Causeway_Importer
         self::set_phase('export');
 
         self::delete_old_listings($imported_ids);
+
+        // Final cleanup: collapse any duplicates that may exist with same causeway_id (keep lowest ID)
+        self::collapse_duplicate_listings();
     }
 
     private static function assign_locations($locations, $post_id) {
@@ -1692,5 +1737,53 @@ class Causeway_Importer
         }
 
         return $attach_id;
+    }
+
+    /**
+     * Find and delete duplicate listings that share the same 'causeway_id'.
+     * Keeps the lowest post ID (oldest) and permanently deletes others.
+     */
+    private static function collapse_duplicate_listings(): void
+    {
+        global $wpdb;
+        // Ensure we only collapse duplicates for the default language (English) and skip translated posts
+        $lang = apply_filters('wpml_default_language', null);
+        if (!is_string($lang) || $lang === '') { $lang = 'en'; }
+
+        $tr_table = $wpdb->prefix . 'icl_translations';
+        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$tr_table}'");
+
+        if (!$table_exists) {
+            // WPML table missing; avoid accidental deletion across languages
+            self::log('⚠️ WPML translations table not found; skipping duplicate collapse to protect translations');
+            return;
+        }
+
+        $sql = "SELECT pm.meta_value AS causeway_id, GROUP_CONCAT(p.ID ORDER BY p.ID ASC) AS ids, COUNT(*) AS cnt
+                FROM {$wpdb->postmeta} pm
+                INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                INNER JOIN {$tr_table} t ON t.element_id = p.ID AND t.element_type = CONCAT('post_', p.post_type)
+                WHERE pm.meta_key = %s AND p.post_type = %s AND p.post_status != 'trash' AND t.language_code = %s
+                GROUP BY pm.meta_value
+                HAVING cnt > 1";
+
+        $rows = $wpdb->get_results($wpdb->prepare($sql, 'causeway_id', 'listing', $lang));
+
+        if (empty($rows)) {
+            return;
+        }
+
+        foreach ($rows as $row) {
+            $cid = (int) $row->causeway_id;
+            $ids = array_filter(array_map('intval', explode(',', (string) $row->ids)));
+            if (count($ids) <= 1) { continue; }
+
+            // Keep the first (lowest) ID; delete the rest
+            $keep = array_shift($ids);
+            foreach ($ids as $del_id) {
+                wp_delete_post($del_id, true);
+                self::log("🗑️ Deleted duplicate listing {$del_id} for Causeway ID {$cid}; kept {$keep}");
+            }
+        }
     }
 }
