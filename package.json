@@ -1,0 +1,13 @@
+{
+  "name": "causeway5-importer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Build tooling for SCSS in Causeway importer plugin",
+  "scripts": {
+    "build:css": "sass src/scss/causeway.scss assets/css/causeway.css --style=compressed --no-source-map",
+    "watch:css": "sass --watch src/scss/causeway.scss:assets/css/causeway.css --style=expanded"
+  },
+  "devDependencies": {
+    "sass": "^1.79.0"
+  }
+}

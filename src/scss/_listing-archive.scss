@@ -1,0 +1,404 @@
+@use 'variables' as *;
+
+.causeway-listings-section {
+
+    // Pagination
+    .causeway-page-list {
+        display: flex;
+        justify-content: center;
+        gap: 4px;
+
+        .mixitup-control {
+            border-radius: 50%;
+            aspect-ratio: 1;
+            width: 35px;
+            height: 35px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 .1rem;
+            color: var(--bs-primary);
+            background-color: #FFF;
+            border: 1px solid rgb(207,
+                    210,
+                    211);
+            transition: all .5s;
+
+            &:not(.mixitup-control-disabled):not(.mixitup-control-truncation-marker) {
+                &:hover {
+                    background-color: var(--bs-primary);
+                    color: #FFF;
+                }
+            }
+
+            &.mixitup-control-disabled {
+                opacity: .5;
+            }
+
+            &.mixitup-control-active {
+                background-color: var(--bs-primary);
+                color: #FFF;
+            }
+
+
+        }
+    }
+
+    .causeway-filterbar {
+        .cs-input-group {
+            border-radius: .75rem;
+            overflow: hidden;
+            width: auto;
+            position: relative;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: stretch;
+            border: 1px solid #cfd2d3;
+            flex-basis: 32%;
+
+            .input-group-text {
+                display: flex;
+                align-items: center;
+                padding: .5rem .75rem;
+                font-size: 1rem;
+                font-weight: 400;
+                line-height: 1.5;
+                color: var(--bs-body-color);
+                text-align: center;
+                white-space: nowrap;
+                background-color: var(--bs-tertiary-bg);
+                border: var(--bs-border-width) solid #cfd2d3;
+                border-radius: .75rem;
+                border-top-right-radius: 0;
+                border-bottom-right-radius: 0;
+                padding: 0 .5rem;
+            }
+
+            input {
+                border: 0;
+                position: relative;
+                flex: 1 1 auto;
+                width: 1%;
+                min-width: 0;
+                font-size: 1rem;
+                padding: .5rem .75rem;
+                outline: none !important;
+            }
+        }
+
+        select {
+            font-size: 1rem;
+            padding: .6rem 2.25rem .6rem .75rem;
+            border: 1px solid #cfd2d3;
+            border-radius: .75rem;
+            // Remove native appearance so we can control the caret spacing
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-color: #fff;
+            // Custom SVG caret (chevron) – encode # as %23 inside data URI
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M4 6l4 4 4-4'/></svg>");
+            background-repeat: no-repeat;
+            background-position: right .75rem center;
+            background-size: 16px 16px;
+            padding-right: 2.75rem; // extra space so text doesn't collide with custom caret
+            line-height: 1.25;
+            cursor: pointer;
+
+            // Hide the IE arrow (legacy)
+            &::-ms-expand {
+                display: none;
+            }
+
+            // Firefox focus inner padding fix
+            &:-moz-focusring {
+                color: transparent;
+                text-shadow: 0 0 0 #000;
+            }
+        }
+    }
+}
+
+/* Listing archive / loop styles */
+.causeway-listings-grid {
+    display: grid;
+    gap: 24px;
+
+    &.auto-fill {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+}
+
+@for $i from 1 through 6 {
+    .causeway-listings-grid.cols-#{$i} {
+        grid-template-columns: repeat(#{$i}, 1fr);
+    }
+}
+
+// Responsive column policy: Below 992px cap at 2 columns; phones (<576px) force single column.
+// Override higher column declarations with a mobile-first rule, then re-enable at ≥992px.
+@media (max-width: 575.98px) {
+    .causeway-listings-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+// Base override (applies to all widths <992px) – place after original @for loop.
+.causeway-listings-grid.cols-3,
+.causeway-listings-grid.cols-4,
+.causeway-listings-grid.cols-5,
+.causeway-listings-grid.cols-6 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 992px) {
+
+    // Test flag to verify compilation of new rules
+    .listing-grid-test-flag {
+        color: #123456;
+    }
+
+    .causeway-listings-grid.cols-3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .causeway-listings-grid.cols-4 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .causeway-listings-grid.cols-5 {
+        grid-template-columns: repeat(5, 1fr);
+    }
+
+    .causeway-listings-grid.cols-6 {
+        grid-template-columns: repeat(6, 1fr);
+    }
+}
+
+.listing-card {
+    background: transparent;
+    border: none;
+    border-radius: $radius;
+    overflow: hidden;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+
+    &:hover .thumb img {
+        transform: scale(1.05);
+    }
+
+    .thumb {
+        display: block;
+        aspect-ratio: 1.49;
+        background: $color-bg-image;
+        overflow: hidden;
+        border-radius: $radius;
+        position: relative;
+
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            border-radius: $radius;
+            transition: all .5s;
+        }
+
+        .thumb-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 8px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+
+            .type {
+                color: var(--bs-primary);
+                border-radius: 50rem;
+                background-color: #FFF;
+                padding: .35em .65em;
+                text-align: center;
+                white-space: nowrap;
+                vertical-align: baseline;
+                font-weight: 600;
+                font-size: 14px;
+            }
+
+            .price {
+                background-color: var(--bs-primary);
+                padding: .5rem 1rem;
+                color: #fff;
+                line-height: 1;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                width: auto;
+                border-radius: .75rem;
+                text-align: center;
+
+                .date-month {
+                    font-weight: 500;
+                    font-size: .75rem;
+                    text-transform: uppercase;
+                }
+
+                .date-day {
+                    font-weight: 700;
+                    font-size: 1.75rem;
+                }
+            }
+
+            .date {
+                background-color: var(--bs-primary);
+                padding: .5rem 1rem;
+                color: #fff;
+                line-height: 1;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                aspect-ratio: 1;
+                width: auto;
+                border-radius: .75rem;
+                text-align: center;
+
+                .date-month {
+                    font-weight: 500;
+                    font-size: .75rem;
+                    text-transform: uppercase;
+                }
+
+                .date-day {
+                    font-weight: 700;
+                    font-size: 1.75rem;
+                }
+            }
+        }
+    }
+
+    .body {
+        padding: 16px 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .title {
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--bs-primary);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .ta-rating {
+            display: flex;
+            gap: 5px;
+
+            svg {
+                width: 1.25em;
+                height: 1.25em;
+            }
+        }
+    }
+}
+
+.causeway-archive-listing {
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 0 20px;
+
+    .listing-card {
+        .title {
+            font-size: 1.1rem;
+        }
+    }
+}
+
+/* Filterbar for Listings Grid block */
+.causeway-filterbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    margin-bottom: 0.75rem;
+
+    .filter-row {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+
+        @media (max-width: 768px) {
+            flex-direction: row;
+
+            .cs-input-group,
+            select {
+                flex: 1 1 auto;
+                flex-shrink: 1 !important;
+                max-width: 100%;
+            }
+        }
+    }
+
+    .filter-title {
+        font-weight: 600;
+    }
+
+    .placeholder {
+        color: rgba(0, 0, 0, 0.6);
+    }
+}
+
+.causeway-pagination {
+    margin-top: 40px;
+    text-align: center;
+
+    .page-numbers {
+        display: inline-block;
+        margin: 0 4px;
+        padding: 6px 10px;
+        border: 1px solid $color-border;
+        border-radius: $radius-sm;
+        text-decoration: none;
+
+        &.current {
+            background: $color-primary;
+            color: #fff;
+            border-color: $color-primary;
+        }
+    }
+}
+
+// Mobile pagination overflow handling
+@media (max-width: 420px) {
+    .causeway-listings-section .causeway-page-list {
+        flex-wrap: wrap;
+        row-gap: 6px;
+        padding: 0 4px;
+    }
+
+    .causeway-listings-section .causeway-page-list .mixitup-control {
+        width: 30px;
+        height: 30px;
+        font-size: .7rem;
+        margin: 2px;
+    }
+}
+
+@media (max-width: 340px) {
+    .causeway-listings-section .causeway-page-list .mixitup-control {
+        width: 26px;
+        height: 26px;
+        font-size: .65rem;
+    }
+}
