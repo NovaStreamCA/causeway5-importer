@@ -203,6 +203,72 @@ add_action('admin_post_causeway_manual_import', function () {
     exit;
 });
 
+// Manual taxonomy-only import (no listings)
+add_action('admin_post_causeway_manual_import_taxonomies', function () {
+    if (!current_user_can('manage_options')) {
+        wp_die('Unauthorized');
+    }
+
+    if (!isset($_POST['causeway_import_taxonomies_nonce']) || !wp_verify_nonce($_POST['causeway_import_taxonomies_nonce'], 'causeway_import_taxonomies_action')) {
+        wp_die('Invalid nonce');
+    }
+
+    // Atomic lock using transient to prevent race conditions
+    $existing_lock = get_transient('causeway_import_lock');
+    if ($existing_lock !== false) {
+        $is_stale = (time() - $existing_lock) > (25 * MINUTE_IN_SECONDS);
+        if ($is_stale) {
+            delete_transient('causeway_import_lock');
+            set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
+            error_log('[Causeway] Released stale import lock and re-acquired (taxonomy-only)');
+        } else {
+            error_log('[Causeway] Taxonomy-only import blocked: another import is already running');
+            wp_redirect(add_query_arg('import_running', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
+            exit;
+        }
+    } else {
+        set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
+    }
+
+    // Mark status as queued
+    $status = [
+        'running' => true,
+        'phase' => 'queued',
+        'processed' => 0,
+        'total' => 0,
+        'percent' => 0,
+        'state' => 'queued',
+        'started_at' => time(),
+        'updated_at' => time(),
+    ];
+    update_option('causeway_import_status', $status, false);
+
+    // Try WP-CLI spawn first
+    $spawned_cli = false;
+    if (apply_filters('causeway_cli_spawn_enabled', true)) {
+        $spawned_cli = causeway_try_spawn_cli_taxonomy_import();
+    }
+
+    if ($spawned_cli) {
+        error_log('🚀 Spawned Causeway taxonomy-only import via WP-CLI in background');
+    } else {
+        // Fallback: schedule a one-off cron event ASAP.
+        $scheduled_for = time();
+        wp_schedule_single_event($scheduled_for, 'causeway_cron_taxonomies_hook');
+        error_log('🕑 Manual taxonomy-only import scheduled for immediate execution via WP-Cron @ '.date('Y-m-d H:i:s',$scheduled_for));
+        if (function_exists('spawn_cron')) {
+            spawn_cron(time());
+        } else {
+            error_log('⚠️ spawn_cron() unavailable; taxonomy-only import will wait for next WP-Cron run/page load.');
+        }
+    }
+
+    $args = [ 'taxonomies_queued' => '1' ];
+    if ($spawned_cli) { $args['cli'] = '1'; }
+    wp_redirect(add_query_arg($args, admin_url('edit.php?post_type=listing&page=causeway-importer')));
+    exit;
+});
+
 // AJAX endpoint to fetch current import status
 add_action('wp_ajax_causeway_import_status', function () {
     if (!current_user_can('manage_options')) {
@@ -273,28 +339,70 @@ add_action('admin_post_causeway_manual_import_reset', function () {
     exit;
 });
 
+function causeway_is_auto_cron_enabled(): bool
+{
+    if (function_exists('get_field')) {
+        $val = get_field('causeway_enable_auto_cron', 'option');
+        // Default to enabled if field not yet saved
+        if ($val === null || $val === '') {
+            return true;
+        }
+        return (bool) $val;
+    }
+
+    return true;
+}
+
+function causeway_sync_cron_schedule(): void
+{
+    if (!function_exists('wp_clear_scheduled_hook')) {
+        return;
+    }
+
+    $enabled = causeway_is_auto_cron_enabled();
+    if (!$enabled) {
+        wp_clear_scheduled_hook('causeway_cron_hook');
+        wp_clear_scheduled_hook('causeway_cron_export_hook');
+        wp_clear_scheduled_hook('causeway_clear_cron_hook');
+        wp_clear_scheduled_hook('causeway_cron_taxonomies_hook');
+        return;
+    }
+
+    if (!wp_next_scheduled('causeway_cron_hook')) {
+        wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
+    }
+
+    if (function_exists('get_field') && get_field('is_headless', 'option')) {
+        if (!wp_next_scheduled('causeway_cron_export_hook')) {
+            wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
+        }
+    } else {
+        wp_clear_scheduled_hook('causeway_cron_export_hook');
+    }
+
+    if (!wp_next_scheduled('causeway_clear_cron_hook')) {
+        wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
+    }
+}
+
+// When settings are saved, apply cron enable/disable immediately.
+add_action('acf/save_post', function ($post_id) {
+    if ($post_id !== 'options') {
+        return;
+    }
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+    causeway_sync_cron_schedule();
+}, 20);
+
 // Register CRON on plugin activation
 register_activation_hook(__FILE__, function () {
     // Ensure registration happens before flush so rules exist
     causeway_register_listing_post_type();
     causeway_register_taxonomies();
-    if (!wp_next_scheduled('causeway_cron_hook')) {
-        wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
-    }
-    if (get_field('is_headless', 'option')) {
-        if (!wp_next_scheduled('causeway_cron_export_hook')) {
-            wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
-        }
-    } else {
-        // Ensure export cron is not scheduled
-        $ts = wp_next_scheduled('causeway_cron_export_hook');
-        if ($ts) {
-            wp_unschedule_event($ts, 'causeway_cron_export_hook');
-        }
-    }
-    if (!wp_next_scheduled('causeway_clear_cron_hook')) {
-        wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
-    }
+
+    causeway_sync_cron_schedule();
 
     // Attempt an immediate taxonomy-only import on fresh activation (best-effort)
     if (class_exists('Causeway_Importer')) {
@@ -311,17 +419,7 @@ register_activation_hook(__FILE__, function () {
 
 // Safety fallback in case plugin was already active
 add_action('init', function () {
-    if (!wp_next_scheduled('causeway_cron_hook')) {
-        wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
-    }
-    if (get_field('is_headless', 'option')) {
-        if (!wp_next_scheduled('causeway_cron_export_hook')) {
-            wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
-        }
-    }
-    if (!wp_next_scheduled('causeway_clear_cron_hook')) {
-        wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
-    }
+    causeway_sync_cron_schedule();
 });
 
 // Last-resort: auto-flush rewrites once if listing rules absent (helps when code updated without reactivation)
@@ -344,14 +442,11 @@ add_action('init', function () {
 
 // Deactivate CRON on plugin deactivation
 register_deactivation_hook(__FILE__, function () {
-    $timestamp = wp_next_scheduled('causeway_cron_hook');
-    if ($timestamp) {
-        wp_unschedule_event($timestamp, 'causeway_cron_hook');
-    }
-
-    $timestamp2 = wp_next_scheduled('causeway_cron_export_hook');
-    if ($timestamp2) {
-        wp_unschedule_event($timestamp2, 'causeway_cron_export_hook');
+    if (function_exists('wp_clear_scheduled_hook')) {
+        wp_clear_scheduled_hook('causeway_cron_hook');
+        wp_clear_scheduled_hook('causeway_cron_export_hook');
+        wp_clear_scheduled_hook('causeway_clear_cron_hook');
+        wp_clear_scheduled_hook('causeway_cron_taxonomies_hook');
     }
 
     flush_rewrite_rules();
@@ -360,19 +455,22 @@ register_deactivation_hook(__FILE__, function () {
 add_action('causeway_cron_hook', 'run_causeway_import_export');
 add_action('causeway_cron_export_hook', 'run_causeway_export');
 add_action('causeway_clear_cron_hook', 'clear_causeway_status');
+add_action('causeway_cron_taxonomies_hook', 'run_causeway_taxonomy_import');
 
 function run_causeway_import_export()
 {
     error_log('🕑 Running Causeway import/export via cron @ ' . date('Y-m-d H:i:s'));
-    
-    // Check if another import is already running
+
+    // Check if another import is already running. If state is 'queued', proceed (manual button pre-acquired the lock).
     $existing_lock = get_transient('causeway_import_lock');
-    if ($existing_lock !== false) {
+    $status = get_option('causeway_import_status', []);
+    $state = is_array($status) ? ($status['state'] ?? '') : '';
+    if ($existing_lock !== false && $state !== 'queued') {
         error_log('[Causeway] Cron import skipped: another import is already running');
         return;
     }
-    
-    // Acquire lock with 30-minute timeout
+
+    // Acquire/refresh lock with 30-minute timeout
     set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
     
     if (class_exists('Causeway_Importer')) {
@@ -392,6 +490,42 @@ function run_causeway_import_export()
             // Release lock on error
             delete_transient('causeway_import_lock');
             error_log('[Causeway] Released import lock after error');
+        }
+    }
+}
+
+function run_causeway_taxonomy_import()
+{
+    error_log('🕑 Running Causeway taxonomy-only import via cron @ ' . date('Y-m-d H:i:s'));
+
+    $existing_lock = get_transient('causeway_import_lock');
+    $status = get_option('causeway_import_status', []);
+    $state = is_array($status) ? ($status['state'] ?? '') : '';
+
+    // If a full import is running, don't start taxonomy-only.
+    if ($existing_lock !== false && $state !== 'queued') {
+        error_log('[Causeway] Cron taxonomy-only import skipped: another import is already running');
+        return;
+    }
+
+    // Acquire/refresh lock
+    set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
+
+    if (class_exists('Causeway_Importer')) {
+        try {
+            Causeway_Importer::import_taxonomies_only();
+        } catch (Throwable $e) {
+            error_log('[Causeway] Taxonomy-only import failed: ' . $e->getMessage());
+            $status = get_option('causeway_import_status', []);
+            if (!is_array($status)) { $status = []; }
+            $status['running'] = false;
+            $status['phase'] = 'error';
+            $status['state'] = 'error';
+            $status['error_message'] = $e->getMessage();
+            $status['updated_at'] = time();
+            update_option('causeway_import_status', $status, false);
+            delete_transient('causeway_import_lock');
+            error_log('[Causeway] Released import lock after taxonomy-only error');
         }
     }
 }
@@ -506,6 +640,81 @@ function causeway_try_spawn_cli_import(): bool
     return false;
 }
 
+/**
+ * Best-effort background spawn of the taxonomy-only importer via WP-CLI.
+ */
+function causeway_try_spawn_cli_taxonomy_import(): bool
+{
+    // Ensure exec/proc_open are permitted
+    $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+    $can_exec = function_exists('exec') && !in_array('exec', $disabled, true);
+    $can_proc = function_exists('proc_open') && !in_array('proc_open', $disabled, true);
+    if (!$can_exec && !$can_proc) {
+        return false;
+    }
+
+    // Resolve WP-CLI binary automatically
+    $wp_bin = '';
+    if ($can_exec) {
+        $out = [];
+        $rv = 1;
+        @exec('command -v wp 2>/dev/null', $out, $rv);
+        if ($rv === 0 && !empty($out[0])) {
+            $wp_bin = trim($out[0]);
+        }
+    }
+    if ($wp_bin === '') {
+        foreach (['/usr/local/bin/wp','/usr/bin/wp','/bin/wp'] as $candidate) {
+            if (is_executable($candidate)) { $wp_bin = $candidate; break; }
+        }
+    }
+    if ($wp_bin === '') {
+        error_log('[Causeway] WP-CLI binary not found on PATH. Install WP-CLI (wp) and ensure it is executable.');
+        return false;
+    }
+
+    $wp_path = apply_filters('causeway_wp_path', ABSPATH);
+    $allow_root = is_callable('posix_geteuid') ? (posix_geteuid() === 0) : true;
+    $allow_root_flag = $allow_root ? ' --allow-root' : '';
+
+    $log_dir = trailingslashit(WP_CONTENT_DIR);
+    $log_file = $log_dir . 'causeway-import.log';
+
+    $cmd_prefix = (strpos($wp_bin, ' ') !== false) ? $wp_bin : escapeshellcmd($wp_bin);
+    $cmd = $cmd_prefix
+        . ' --path=' . escapeshellarg($wp_path)
+        . $allow_root_flag
+        . ' causeway import_taxonomies';
+
+    $bg = 'nohup ' . $cmd . ' >> ' . escapeshellarg($log_file) . ' 2>&1 & echo $!';
+
+    try {
+        if ($can_exec) {
+            $output = [];
+            $exit = 0;
+            @exec($bg, $output, $exit);
+            $pid = !empty($output) ? trim((string) end($output)) : '';
+            if ($exit === 0 && preg_match('/^[0-9]+$/', $pid)) {
+                return true;
+            }
+            // If we didn't receive a PID, treat as failure so the caller can fall back to cron.
+            return false;
+        }
+        if ($can_proc) {
+            $descriptorspec = [0 => ['pipe', 'r'], 1 => ['file', $log_file, 'a'], 2 => ['file', $log_file, 'a']];
+            $process = @proc_open($cmd, $descriptorspec, $pipes, null, null, ['bypass_shell' => true]);
+            if (is_resource($process)) {
+                @proc_close($process);
+                return true;
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('[Causeway] CLI spawn failed: ' . $e->getMessage());
+    }
+
+    return false;
+}
+
 if (defined('WP_CLI') && WP_CLI) {
 
     /**
@@ -534,6 +743,28 @@ if (defined('WP_CLI') && WP_CLI) {
 
             $secs = number_format(microtime(true) - $start, 2);
             WP_CLI::success("Import finished in {$secs}s");
+        }
+
+        /**
+         * Run the taxonomy-only import (no listings).
+         *
+         * ## EXAMPLES
+         *
+         *     wp causeway import_taxonomies
+         *
+         * @when after_wp_load
+         */
+        public function import_taxonomies()
+        {
+            $start = microtime(true);
+
+            ini_set('memory_limit', '1G');
+            set_time_limit(0);
+
+            Causeway_Importer::import_taxonomies_only();
+
+            $secs = number_format(microtime(true) - $start, 2);
+            WP_CLI::success("Taxonomy-only import finished in {$secs}s");
         }
     }
 

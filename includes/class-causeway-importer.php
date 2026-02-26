@@ -105,7 +105,9 @@ class Causeway_Importer
         do_action('wpml_switch_language', 'en');        // or your real default, e.g. 'en_CA'
         /* ────────────────────────────────────────── */
 
-        define('CAUSEWAY_IMPORTING', true);
+        if (!defined('CAUSEWAY_IMPORTING')) {
+            define('CAUSEWAY_IMPORTING', true);
+        }
         self::$start = microtime(true);
 
          /* ── PERFORMANCE GUARD-RAILS ───────────────────────────── */
@@ -165,6 +167,11 @@ class Causeway_Importer
         // Release the import lock
         delete_transient('causeway_import_lock');
         self::log('🔓 Released import lock');
+
+        // Restore language (best-effort)
+        if (is_string($orig_lang) && $orig_lang !== '') {
+            do_action('wpml_switch_language', $orig_lang);
+        }
     }
 
     public static function export() {
@@ -176,6 +183,12 @@ class Causeway_Importer
     {
         self::log('start taxonomy-only import');
 
+        self::$total_listings = 0;
+        self::$processed_listings = 0;
+        self::set_phase('bootstrap');
+        self::update_status(['running' => true, 'state' => 'running']);
+        register_shutdown_function([self::class, 'shutdown_handler']);
+
         $baseURL = get_field('causeway_api_url', 'option');
         if ($baseURL) {
             self::$baseURL = $baseURL;
@@ -185,47 +198,79 @@ class Causeway_Importer
         $orig_lang = apply_filters('wpml_current_language', null);
         do_action('wpml_switch_language', 'en');
 
-        define('CAUSEWAY_IMPORTING', true);
+        if (!defined('CAUSEWAY_IMPORTING')) {
+            define('CAUSEWAY_IMPORTING', true);
+        }
+
         self::$start = microtime(true);
 
-        if (function_exists('set_time_limit')) {
-            @set_time_limit(0);
+        try {
+            if (function_exists('set_time_limit')) {
+                @set_time_limit(0);
+            }
+            if (function_exists('wp_suspend_cache_addition')) {
+                wp_suspend_cache_addition(true);
+            }
+            wp_defer_term_counting(true);
+
+            self::set_phase('taxonomies');
+
+            // Preload
+            self::$areas = self::fetch_remote('areas');
+            self::$communities = self::fetch_remote('communities');
+            self::$regions = self::fetch_remote('regions');
+            self::$counties = self::fetch_remote('counties');
+
+            // Core taxonomies
+            self::import_types();
+            self::import_categories();
+            self::import_amenities();
+            self::import_campaigns();
+            self::import_seasons();
+            self::import_terms('listing-counties', self::$counties);
+            self::import_terms('listing-areas', self::$areas);
+            self::import_terms('listing-communities', self::$communities);
+            self::import_terms('listing-regions', self::$regions);
+
+            self::assign_area_communities();
+            self::assign_community_areas_and_regions();
+            self::assign_region_communities();
+
+            if (get_field('is_headless', 'option')) {
+                self::assign_area_slugs();
+                self::assign_category_slugs();
+            }
+
+            self::log('✅ Taxonomy import completed @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+
+            self::set_phase('exporting');
+            self::export_listings();
+
+            self::set_phase('done');
+            self::update_status(['running' => false, 'state' => 'done', 'percent' => 1.0]);
+        } catch (Throwable $e) {
+            self::update_status([
+                'running' => false,
+                'state' => 'error',
+                'phase' => 'error',
+                'error_message' => $e->getMessage(),
+            ]);
+            throw $e;
+        } finally {
+            wp_defer_term_counting(false);
+            if (function_exists('wp_suspend_cache_addition')) {
+                wp_suspend_cache_addition(false);
+            }
+
+            // Release the import lock
+            delete_transient('causeway_import_lock');
+            self::log('🔓 Released import lock');
+
+            // Restore language (best-effort)
+            if (is_string($orig_lang) && $orig_lang !== '') {
+                do_action('wpml_switch_language', $orig_lang);
+            }
         }
-        if (function_exists('wp_suspend_cache_addition')) {
-            wp_suspend_cache_addition(true);
-        }
-        wp_defer_term_counting(true);
-
-        // Preload
-        self::$areas = self::fetch_remote('areas');
-        self::$communities = self::fetch_remote('communities');
-        self::$regions = self::fetch_remote('regions');
-        self::$counties = self::fetch_remote('counties');
-
-        // Core taxonomies
-        self::import_types();
-        self::import_categories();
-        self::import_amenities();
-        self::import_campaigns();
-        self::import_seasons();
-        self::import_terms('listing-counties', self::$counties);
-        self::import_terms('listing-areas', self::$areas);
-        self::import_terms('listing-communities', self::$communities);
-        self::import_terms('listing-regions', self::$regions);
-
-        self::assign_area_communities();
-        self::assign_community_areas_and_regions();
-        self::assign_region_communities();
-
-        if (get_field('is_headless', 'option')) {
-            self::assign_area_slugs();
-            self::assign_category_slugs();
-        }
-
-        self::log('✅ Taxonomy import completed @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
-
-        wp_defer_term_counting(false);
-        wp_suspend_cache_addition(false);
     }
 
     private static function fetch_remote($endpoint)
@@ -293,6 +338,15 @@ class Causeway_Importer
             $imported_ids[] = $causeway_id;
             update_field('icon', $icon, 'listing-type_' . $term_id);
             update_field('causeway_id', $causeway_id, 'listing-type_' . $term_id);
+
+            // Keep in-memory cache fresh during this run
+            if (!isset(self::$term_cache['listing-type']) || !is_array(self::$term_cache['listing-type'])) {
+                self::$term_cache['listing-type'] = [];
+            }
+            $t = get_term($term_id, 'listing-type');
+            if ($t && !is_wp_error($t)) {
+                self::$term_cache['listing-type'][(int) $causeway_id] = $t;
+            }
         }
 
         $import_count = is_array($imported_ids) ? count($imported_ids) : 0;
@@ -307,6 +361,7 @@ class Causeway_Importer
         $data = self::fetch_remote('categories');
         $lookup = [];
         $imported_ids = [];
+        $id_to_term_id = [];
         $total = is_array($data) ? count($data) : 0;
 
         self::log('✅ Received ' . $total . ' categories from API. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
@@ -315,7 +370,7 @@ class Causeway_Importer
             $lookup[$causeway_id] = $item;
         }
 
-        // Second pass: create/update terms with parent handling
+        // Pass 1: create/update terms without relying on parent ordering
         foreach ($lookup as $item) {
             $name = $item['name'];
             $icon = $item['type']['icons'] ?? null;
@@ -327,43 +382,79 @@ class Causeway_Importer
                 continue;
             }
 
-            // Check if term exists
-            $existing = self::get_term_by_causeway_id($causeway_id, 'listings-category');
+            // Check if term exists by causeway_id (preferred)
+            $existing = self::get_term_by_causeway_id((int) $causeway_id, 'listings-category');
 
-            $args = [
-                'slug' => sanitize_title($name),
-            ];
+            // Slug: ensure uniqueness if two categories share a name
+            $base_slug = sanitize_title($name);
+            $slug = $base_slug;
 
-            // If parent exists, lookup its WP term ID
-            if ($parent_causeway_id) {
-                $parent_term = self::get_term_by_causeway_id($parent_causeway_id, 'listings-category');
-                if ($parent_term) {
-                    $args['parent'] = $parent_term->term_id;
+            $collision = get_term_by('slug', $base_slug, 'listings-category');
+            if ($collision && !is_wp_error($collision)) {
+                $collision_term_id = (int) $collision->term_id;
+                $existing_term_id = $existing ? (int) $existing->term_id : 0;
+
+                // If the slug already belongs to a different term, disambiguate
+                if ($existing_term_id === 0 || $collision_term_id !== $existing_term_id) {
+                    $slug = $base_slug . '-' . (int) $causeway_id;
                 }
             }
+
+            $args = [
+                'slug' => $slug,
+            ];
 
             if ($existing) {
                 $term_id = $existing->term_id;
-                $update_args = array_merge($args, [
+                $update_args = [
                     'name' => $name,
-                ]);
-
-                // Update parent if different
-                $current_parent_id = (int) $existing->parent;
-                $new_parent_id = isset($args['parent']) ? (int) $args['parent'] : 0;
-
-                if ($current_parent_id !== $new_parent_id) {
-                    $update_args['parent'] = $new_parent_id;
+                ];
+                // Only adjust slug if it would collide (keeps existing URLs stable)
+                if (!empty($args['slug']) && $args['slug'] !== $existing->slug) {
+                    $update_args['slug'] = $args['slug'];
                 }
 
-                wp_update_term($term_id, 'listings-category', $update_args);
+                $updated = wp_update_term($term_id, 'listings-category', $update_args);
+                if (is_wp_error($updated)) {
+                    self::log('❌ Failed to update category term ' . $term_id . ' (' . $name . '): ' . $updated->get_error_message());
+                }
             } else {
                 $term = wp_insert_term($name, 'listings-category', $args);
                 if (is_wp_error($term)) {
-                    continue;
+                    // If slug/name already exists, retry with a disambiguated slug
+                    if ($term->get_error_code() === 'term_exists') {
+                        $existing_id = (int) $term->get_error_data('term_exists');
+                        if ($existing_id > 0) {
+                            $existing_causeway = (int) get_field('causeway_id', 'listings-category_' . $existing_id);
+                            if ($existing_causeway === (int) $causeway_id) {
+                                $term_id = $existing_id;
+                            } else {
+                                $retry_slug = $base_slug . '-' . (int) $causeway_id;
+                                $retry = wp_insert_term($name, 'listings-category', [ 'slug' => $retry_slug ]);
+                                if (is_wp_error($retry)) {
+                                    self::log('❌ Failed to insert duplicate-named category (retry) ' . $name . ' [' . $causeway_id . ']: ' . $retry->get_error_message());
+                                    continue;
+                                }
+                                $term_id = $retry['term_id'];
+                            }
+                        } else {
+                            self::log('❌ Failed to insert category (term_exists w/o id) ' . $name . ' [' . $causeway_id . ']');
+                            continue;
+                        }
+                    } else {
+                        self::log('❌ Failed to insert category ' . $name . ' [' . $causeway_id . ']: ' . $term->get_error_message());
+                        continue;
+                    }
+                } else {
+                    $term_id = $term['term_id'];
                 }
-                $term_id = $term['term_id'];
             }
+
+            if (!isset($term_id)) {
+                continue;
+            }
+
+            $id_to_term_id[(int) $causeway_id] = (int) $term_id;
 
             // Save ACF fields
             if (isset($term_id)) {
@@ -389,9 +480,57 @@ class Causeway_Importer
                     }
                     update_field('category_attachments', $attachments, 'listings-category_' . $term_id);
                 }
+
+                // Keep in-memory cache fresh during this run (critical for parent assignment)
+                if (!isset(self::$term_cache['listings-category']) || !is_array(self::$term_cache['listings-category'])) {
+                    self::$term_cache['listings-category'] = [];
+                }
+                $t = get_term($term_id, 'listings-category');
+                if ($t && !is_wp_error($t)) {
+                    self::$term_cache['listings-category'][(int) $causeway_id] = $t;
+                }
             }
 
             $imported_ids[] = $causeway_id;
+        }
+
+        // Pass 2: Assign parents now that all terms exist
+        foreach ($lookup as $item) {
+            $causeway_id = $item['id'] ?? null;
+            $parent_causeway_id = $item['parent']['id'] ?? null;
+            if (!$causeway_id || !$parent_causeway_id) {
+                continue;
+            }
+
+            $term_id = $id_to_term_id[(int) $causeway_id] ?? null;
+            if (!$term_id) {
+                $existing = self::get_term_by_causeway_id((int) $causeway_id, 'listings-category');
+                $term_id = $existing ? (int) $existing->term_id : null;
+            }
+            if (!$term_id) {
+                continue;
+            }
+
+            $parent_term_id = $id_to_term_id[(int) $parent_causeway_id] ?? null;
+            if (!$parent_term_id) {
+                $parent_term = self::get_term_by_causeway_id((int) $parent_causeway_id, 'listings-category');
+                $parent_term_id = $parent_term ? (int) $parent_term->term_id : null;
+            }
+            if (!$parent_term_id) {
+                continue;
+            }
+
+            $current = get_term($term_id, 'listings-category');
+            if (!$current || is_wp_error($current)) {
+                continue;
+            }
+
+            if ((int) $current->parent !== (int) $parent_term_id) {
+                $updated = wp_update_term($term_id, 'listings-category', [ 'parent' => (int) $parent_term_id ]);
+                if (is_wp_error($updated)) {
+                    self::log('❌ Failed to set parent for category term ' . $term_id . ' (Causeway ' . $causeway_id . '): ' . $updated->get_error_message());
+                }
+            }
         }
 
         $import_count = is_array($imported_ids) ? count($imported_ids) : 0;
@@ -1746,28 +1885,33 @@ class Causeway_Importer
     private static function collapse_duplicate_listings(): void
     {
         global $wpdb;
-        // Ensure we only collapse duplicates for the default language (English) and skip translated posts
+        // Prefer collapsing only English posts when WPML is present; otherwise collapse across all listings
         $lang = apply_filters('wpml_default_language', null);
         if (!is_string($lang) || $lang === '') { $lang = 'en'; }
 
         $tr_table = $wpdb->prefix . 'icl_translations';
         $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$tr_table}'");
 
-        if (!$table_exists) {
-            // WPML table missing; avoid accidental deletion across languages
-            self::log('⚠️ WPML translations table not found; skipping duplicate collapse to protect translations');
-            return;
-        }
-
-        $sql = "SELECT pm.meta_value AS causeway_id, GROUP_CONCAT(p.ID ORDER BY p.ID ASC) AS ids, COUNT(*) AS cnt
+        if ($table_exists) {
+            // WPML present: restrict to English so translations (e.g., fr) are preserved
+            $sql = "SELECT pm.meta_value AS causeway_id, GROUP_CONCAT(p.ID ORDER BY p.ID ASC) AS ids, COUNT(*) AS cnt
                 FROM {$wpdb->postmeta} pm
                 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
                 INNER JOIN {$tr_table} t ON t.element_id = p.ID AND t.element_type = CONCAT('post_', p.post_type)
                 WHERE pm.meta_key = %s AND p.post_type = %s AND p.post_status != 'trash' AND t.language_code = %s
                 GROUP BY pm.meta_value
                 HAVING cnt > 1";
-
-        $rows = $wpdb->get_results($wpdb->prepare($sql, 'causeway_id', 'listing', $lang));
+            $rows = $wpdb->get_results($wpdb->prepare($sql, 'causeway_id', 'listing', $lang));
+        } else {
+            // No WPML: safe to collapse duplicates globally for listings
+            $sql = "SELECT pm.meta_value AS causeway_id, GROUP_CONCAT(p.ID ORDER BY p.ID ASC) AS ids, COUNT(*) AS cnt
+                FROM {$wpdb->postmeta} pm
+                INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                WHERE pm.meta_key = %s AND p.post_type = %s AND p.post_status != 'trash'
+                GROUP BY pm.meta_value
+                HAVING cnt > 1";
+            $rows = $wpdb->get_results($wpdb->prepare($sql, 'causeway_id', 'listing'));
+        }
 
         if (empty($rows)) {
             return;

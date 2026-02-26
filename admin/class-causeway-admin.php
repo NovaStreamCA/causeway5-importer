@@ -47,11 +47,17 @@ class Causeway_Admin {
         if (isset($_GET['import_queued']) && $_GET['import_queued'] === '1') {
             echo '<div class="notice notice-info is-dismissible"><p>🕑 Import scheduled. It will run in the background shortly. Importing can take up to 30 minutes.</p></div>';
         }
+        if (isset($_GET['taxonomies_queued']) && $_GET['taxonomies_queued'] === '1') {
+            echo '<div class="notice notice-info is-dismissible"><p>🕑 Taxonomy-only import scheduled. It will run in the background shortly.</p></div>';
+        }
         if (isset($_GET['import_running']) && $_GET['import_running'] === '1') {
             echo '<div class="notice notice-warning is-dismissible"><p>⚠️ An import is already running. You can watch progress below.</p></div>';
         }
         if (isset($_GET['imported']) && $_GET['imported'] === '1') {
             echo '<div class="notice notice-success is-dismissible"><p>✅ Listings imported successfully.</p></div>';
+        }
+        if (isset($_GET['taxonomies_imported']) && $_GET['taxonomies_imported'] === '1') {
+            echo '<div class="notice notice-success is-dismissible"><p>✅ Taxonomies imported successfully.</p></div>';
         }
         if (isset($_GET['import_reset']) && $_GET['import_reset'] === '1') {
             echo '<div class="notice notice-info is-dismissible"><p>🔄 Import status reset.</p></div>';
@@ -75,7 +81,8 @@ class Causeway_Admin {
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
             <div>
                 <strong>Import status:</strong> <span id="cw-phase"><?php echo $phase; ?></span>
-                <div id="cw-error" style="<?php echo ($state === 'error' && $error_message) ? '' : 'display:none;'; ?>margin-top:4px;color:#b32d2e;font-weight:600;">Error: <?php echo $error_message; ?></div>
+                <div id="cw-error" style="<?php echo ($state === 'error' && $error_message) ? '' : 'display:none;'; ?>margin-top:4px;color:#b32d2e;font-weight:600;">Error:
+                    <?php echo $error_message; ?></div>
             </div>
             <div id="cw-count-wrap" style="color:#555;<?php echo $has_total ? '' : 'display:none;'; ?>;text-align:right;">
                 <span id="cw-count"><?php echo $processed; ?></span>
@@ -101,10 +108,18 @@ class Causeway_Admin {
             <input type="hidden" name="action" value="causeway_manual_import">
             <input type="submit" name="causeway_import_submit" class="button button-primary" value="Start Import" <?php echo $running ? 'disabled' : ''; ?>>
         </form>
+
+        <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="margin:0;">
+            <?php wp_nonce_field('causeway_import_taxonomies_action', 'causeway_import_taxonomies_nonce'); ?>
+            <input type="hidden" name="action" value="causeway_manual_import_taxonomies">
+            <input type="submit" name="causeway_import_taxonomies_submit" class="button button-secondary" value="Import Only Taxonomies" <?php echo $running ? 'disabled' : ''; ?>>
+        </form>
+
         <div id="cw-inline-controls" style="display:<?php echo $running ? 'flex' : 'none'; ?>; gap:8px; align-items:center;">
             <button type="button" class="button" id="cw-cancel-btn">Cancel Import</button>
             <span id="cw-cancelled" style="display:none;color:#555;">Cancel requested…</span>
-            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Reset status? This will clear the running flag.');" style="margin:0;display:inline;">
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Reset status? This will clear the running flag.');"
+                style="margin:0;display:inline;">
                 <?php wp_nonce_field('causeway_import_reset_action', 'causeway_import_reset_nonce'); ?>
                 <input type="hidden" name="action" value="causeway_manual_import_reset" />
                 <button type="submit" class="button">Force Reset Status</button>
@@ -113,7 +128,7 @@ class Causeway_Admin {
     </div>
 </div>
 <script>
-(function(){
+(function() {
     var $wrap = document.getElementById('causeway-progress');
     var $bar = document.getElementById('cw-bar');
     var $phase = document.getElementById('cw-phase');
@@ -125,24 +140,29 @@ class Causeway_Admin {
     var $cancelled = document.getElementById('cw-cancelled');
     var $inlineControls = document.getElementById('cw-inline-controls');
     var $err = document.getElementById('cw-error');
-    function poll(){
+
+    function poll() {
         var xhr = new XMLHttpRequest();
         xhr.open('POST', ajaxurl, true);
-        xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded; charset=UTF-8');
-        xhr.onload = function(){
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+        xhr.onload = function() {
             try {
                 var res = JSON.parse(xhr.responseText);
                 if (!res || !res.success) return;
                 var s = res.data || {};
                 if (s.running) {
                     if ($wrap) $wrap.style.display = 'block';
-                    var percent = Math.max(0, Math.min(100, Math.round((s.percent||0)*100)));
+                    var percent = Math.max(0, Math.min(100, Math.round((s.percent || 0) * 100)));
                     if ($bar) $bar.style.width = percent + '%';
                     if ($phase) $phase.textContent = s.phase || 'running';
                     if ($count) $count.textContent = s.processed || 0;
                     if ($total) $total.textContent = s.total || 0;
                     if ($countWrap) {
-                        if ((s.total||0) > 0) { $countWrap.style.display = ''; } else { $countWrap.style.display = 'none'; }
+                        if ((s.total || 0) > 0) {
+                            $countWrap.style.display = '';
+                        } else {
+                            $countWrap.style.display = 'none';
+                        }
                     }
                     if ($pct) $pct.textContent = percent;
                     if ($err) $err.style.display = 'none';
@@ -152,25 +172,28 @@ class Causeway_Admin {
                 } else if (s.state === 'error') {
                     if ($wrap) $wrap.style.display = 'block';
                     if ($phase) $phase.textContent = 'error';
-                    if ($err) { $err.textContent = 'Error: ' + (s.error_message || 'Import failed'); $err.style.display = ''; }
+                    if ($err) {
+                        $err.textContent = 'Error: ' + (s.error_message || 'Import failed');
+                        $err.style.display = '';
+                    }
                     clearInterval(timer);
                 } else {
                     if ($wrap) $wrap.style.display = 'none';
                     if ($inlineControls) $inlineControls.style.display = 'none';
                     clearInterval(timer);
                 }
-            } catch(e){}
+            } catch (e) {}
         };
         xhr.send('action=causeway_import_status');
     }
     if ($cancelBtn) {
-        $cancelBtn.addEventListener('click', function(){
+        $cancelBtn.addEventListener('click', function() {
             $cancelBtn.disabled = true;
             if ($cancelled) $cancelled.style.display = '';
             var xhr = new XMLHttpRequest();
             xhr.open('POST', ajaxurl, true);
-            xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded; charset=UTF-8');
-            xhr.onload = function(){ };
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+            xhr.onload = function() {};
             xhr.send('action=causeway_import_cancel');
         });
     }
