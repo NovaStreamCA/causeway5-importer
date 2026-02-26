@@ -605,6 +605,15 @@ function causeway_register_acf_fields() {
                     'message' => 'Write importer debug logs to error_log',
                     'default_value' => 0,
                 ],
+                [
+                    'key' => 'field_causeway_enable_auto_cron',
+                    'label' => 'Enable Automatic Cron',
+                    'name' => 'causeway_enable_auto_cron',
+                    'type' => 'true_false',
+                    'ui' => 1,
+                    'message' => 'When enabled, Causeway schedules recurring imports/exports via WP-Cron. Manual imports still work.',
+                    'default_value' => 1,
+                ],
             ],
             'location' => [
                 [

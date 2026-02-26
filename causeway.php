@@ -339,28 +339,70 @@ add_action('admin_post_causeway_manual_import_reset', function () {
     exit;
 });
 
+function causeway_is_auto_cron_enabled(): bool
+{
+    if (function_exists('get_field')) {
+        $val = get_field('causeway_enable_auto_cron', 'option');
+        // Default to enabled if field not yet saved
+        if ($val === null || $val === '') {
+            return true;
+        }
+        return (bool) $val;
+    }
+
+    return true;
+}
+
+function causeway_sync_cron_schedule(): void
+{
+    if (!function_exists('wp_clear_scheduled_hook')) {
+        return;
+    }
+
+    $enabled = causeway_is_auto_cron_enabled();
+    if (!$enabled) {
+        wp_clear_scheduled_hook('causeway_cron_hook');
+        wp_clear_scheduled_hook('causeway_cron_export_hook');
+        wp_clear_scheduled_hook('causeway_clear_cron_hook');
+        wp_clear_scheduled_hook('causeway_cron_taxonomies_hook');
+        return;
+    }
+
+    if (!wp_next_scheduled('causeway_cron_hook')) {
+        wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
+    }
+
+    if (function_exists('get_field') && get_field('is_headless', 'option')) {
+        if (!wp_next_scheduled('causeway_cron_export_hook')) {
+            wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
+        }
+    } else {
+        wp_clear_scheduled_hook('causeway_cron_export_hook');
+    }
+
+    if (!wp_next_scheduled('causeway_clear_cron_hook')) {
+        wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
+    }
+}
+
+// When settings are saved, apply cron enable/disable immediately.
+add_action('acf/save_post', function ($post_id) {
+    if ($post_id !== 'options') {
+        return;
+    }
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+    causeway_sync_cron_schedule();
+}, 20);
+
 // Register CRON on plugin activation
 register_activation_hook(__FILE__, function () {
     // Ensure registration happens before flush so rules exist
     causeway_register_listing_post_type();
     causeway_register_taxonomies();
-    if (!wp_next_scheduled('causeway_cron_hook')) {
-        wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
-    }
-    if (get_field('is_headless', 'option')) {
-        if (!wp_next_scheduled('causeway_cron_export_hook')) {
-            wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
-        }
-    } else {
-        // Ensure export cron is not scheduled
-        $ts = wp_next_scheduled('causeway_cron_export_hook');
-        if ($ts) {
-            wp_unschedule_event($ts, 'causeway_cron_export_hook');
-        }
-    }
-    if (!wp_next_scheduled('causeway_clear_cron_hook')) {
-        wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
-    }
+
+    causeway_sync_cron_schedule();
 
     // Attempt an immediate taxonomy-only import on fresh activation (best-effort)
     if (class_exists('Causeway_Importer')) {
@@ -377,17 +419,7 @@ register_activation_hook(__FILE__, function () {
 
 // Safety fallback in case plugin was already active
 add_action('init', function () {
-    if (!wp_next_scheduled('causeway_cron_hook')) {
-        wp_schedule_event(time(), 'twicedaily', 'causeway_cron_hook');
-    }
-    if (get_field('is_headless', 'option')) {
-        if (!wp_next_scheduled('causeway_cron_export_hook')) {
-            wp_schedule_event(time() + 60 * 30, 'twicedaily', 'causeway_cron_export_hook');
-        }
-    }
-    if (!wp_next_scheduled('causeway_clear_cron_hook')) {
-        wp_schedule_event(time(), 'hourly', 'causeway_clear_cron_hook');
-    }
+    causeway_sync_cron_schedule();
 });
 
 // Last-resort: auto-flush rewrites once if listing rules absent (helps when code updated without reactivation)
@@ -410,14 +442,11 @@ add_action('init', function () {
 
 // Deactivate CRON on plugin deactivation
 register_deactivation_hook(__FILE__, function () {
-    $timestamp = wp_next_scheduled('causeway_cron_hook');
-    if ($timestamp) {
-        wp_unschedule_event($timestamp, 'causeway_cron_hook');
-    }
-
-    $timestamp2 = wp_next_scheduled('causeway_cron_export_hook');
-    if ($timestamp2) {
-        wp_unschedule_event($timestamp2, 'causeway_cron_export_hook');
+    if (function_exists('wp_clear_scheduled_hook')) {
+        wp_clear_scheduled_hook('causeway_cron_hook');
+        wp_clear_scheduled_hook('causeway_cron_export_hook');
+        wp_clear_scheduled_hook('causeway_clear_cron_hook');
+        wp_clear_scheduled_hook('causeway_cron_taxonomies_hook');
     }
 
     flush_rewrite_rules();
