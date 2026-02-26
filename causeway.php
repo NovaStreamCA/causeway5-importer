@@ -7,6 +7,7 @@
  * Version: 1.1.4
  * Author: NovaStream
  * Update URI: https://github.com/NovaStreamCA/causeway5-importer
+ * 
  */
 
 if (!defined('ABSPATH')) {
