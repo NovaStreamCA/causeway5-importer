@@ -35,6 +35,7 @@ function get_listings($request)
     $id        = $request->get_param('id');
     $per_page  = $request->get_param('per_page') ?: -1;
     $page      = $request->get_param('page') ?: 1;
+    $types     = $request->get_param('type');
 
     $args = [
         'post_type'      => 'listing',
@@ -49,7 +50,66 @@ function get_listings($request)
     ];
 
     if ($id) {
-        $args['p'] = intval($id);
+        $requested_id = intval($id);
+        $resolved_post_id = 0;
+
+        // API consumers usually pass Causeway IDs, not WP post IDs.
+        $by_causeway_id = get_posts([
+            'post_type'      => 'listing',
+            'post_status'    => 'publish',
+            'meta_key'       => 'causeway_id',
+            'meta_value'     => $requested_id,
+            'posts_per_page' => 1,
+            'fields'         => 'ids',
+        ]);
+
+        if (!empty($by_causeway_id)) {
+            $resolved_post_id = (int) $by_causeway_id[0];
+        } elseif (get_post_type($requested_id) === 'listing') {
+            // Backward-compatible fallback for callers still sending WP post IDs.
+            $resolved_post_id = $requested_id;
+        }
+
+        // Force no results if an explicit id was requested but could not be resolved.
+        $args['p'] = $resolved_post_id > 0 ? $resolved_post_id : 0;
+    }
+
+    // Filter listings by one or more listing-type slugs.
+    $allowed_type_slugs = [
+        'business',
+        'event',
+        'food-drink',
+        'places-to-stay',
+        'things-to-do',
+    ];
+
+    $requested_type_slugs = [];
+    if (is_array($types)) {
+        $requested_type_slugs = $types;
+    } elseif (is_string($types) && $types !== '') {
+        $requested_type_slugs = explode(',', $types);
+    }
+
+
+    if (!empty($requested_type_slugs)) {
+        $requested_type_slugs = array_values(array_filter(array_map(function ($slug) {
+            return sanitize_title(trim((string) $slug));
+        }, $requested_type_slugs)));
+
+        $valid_type_slugs = array_values(array_intersect($requested_type_slugs, $allowed_type_slugs));
+
+
+
+        if (!empty($valid_type_slugs)) {
+            $args['tax_query'] = [
+                [
+                    'taxonomy' => 'listing-type',
+                    'field'    => 'slug',
+                    'terms'    => $valid_type_slugs,
+                    'operator' => 'IN',
+                ],
+            ];
+        }
     }
 
     $query = new WP_Query($args);
