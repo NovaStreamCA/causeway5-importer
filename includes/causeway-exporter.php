@@ -806,13 +806,67 @@ function format_dates($dates): array
     return $result;
 }
 
+function to_iso8601_utc($datetime): ?string
+{
+    if (!is_string($datetime) || trim($datetime) === '') {
+        return null;
+    }
+
+    $value = preg_replace('/\s+/', ' ', trim($datetime));
+    if (!is_string($value) || $value === '') {
+        return null;
+    }
+
+    static $utc_timezone = null;
+    if ($utc_timezone === null) {
+        $utc_timezone = new DateTimeZone('UTC');
+    }
+
+    // Accept common ACF date formats first (source values are UTC already).
+    $formats = [
+        'd/m/Y h:i a',
+        'd/m/Y g:i a',
+        'd/m/Y h:iA',
+        'd/m/Y g:iA',
+        'd/m/Y H:i:s',
+        'd/m/Y H:i',
+        'Y-m-d H:i:s',
+        'Y-m-d H:i',
+    ];
+
+    foreach ($formats as $format) {
+        $parsed = DateTimeImmutable::createFromFormat('!' . $format, $value, $utc_timezone);
+        if ($parsed instanceof DateTimeImmutable) {
+            $errors = DateTimeImmutable::getLastErrors();
+            $has_warnings = is_array($errors) && !empty($errors['warning_count']);
+            $has_errors = is_array($errors) && !empty($errors['error_count']);
+
+            if (!$has_warnings && !$has_errors) {
+                return $parsed->setTimezone($utc_timezone)->format('Y-m-d\\TH:i:s\\Z');
+            }
+        }
+    }
+
+    try {
+        $parsed = new DateTimeImmutable($value, $utc_timezone);
+        return $parsed->setTimezone($utc_timezone)->format('Y-m-d\\TH:i:s\\Z');
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
 function format_occurrences(array $rows): array {
     $out = [];
 
     foreach ($rows as $row) {
+        $start_at = $row['occurrence_start'] ?? null;
+        $end_at = $row['occurrence_end'] ?? null;
+
         $out[] = [
-            'start_at' => $row['occurrence_start'] ?? null,
-            'end_at'   => $row['occurrence_end']   ?? null,
+            'start_at' => $start_at,
+            'end_at'   => $end_at,
+            'start_at_iso' => to_iso8601_utc($start_at),
+            'end_at_iso'   => to_iso8601_utc($end_at),
         ];
     }
 
