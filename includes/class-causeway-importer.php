@@ -2056,8 +2056,6 @@ class Causeway_Importer
             return;
         }
 
-        self::log('🌐 WPML integration start for listing ID: ' . $post_id);
-
         // Only trigger from the source/default language post.
         $default_lang = apply_filters('wpml_default_language', null);
         $post_lang = apply_filters('wpml_element_language_code', null, [
@@ -2071,7 +2069,6 @@ class Causeway_Importer
 
         // Let WPML's automatic translation listeners run when available.
         do_action('wpml_after_save_post', $post_id);
-        self::log('🌐 WPML after-save hook fired for listing ID: ' . $post_id);
 
         // Fallback: explicitly create local WPML jobs per target language.
         global $wpml_translation_job_factory;
@@ -2085,8 +2082,6 @@ class Causeway_Importer
             self::log('⚠️ WPML active languages unavailable; skipping job creation for listing ID: ' . $post_id);
             return;
         }
-
-        self::log('🌐 WPML active languages loaded for listing ID ' . $post_id . ': ' . implode(',', array_keys($langs)));
 
         $created = 0;
         foreach ($langs as $lang_code => $lang_data) {
@@ -2125,9 +2120,6 @@ class Causeway_Importer
         // Keep status metadata fresh for TM dashboard states.
         if (has_action('wpml_tm_save_post')) {
             do_action('wpml_tm_save_post', $post_id, $post, false);
-            self::log('🌐 WPML TM save_post fired for listing ID: ' . $post_id);
-        } else {
-            self::log('⚠️ WPML TM save_post action unavailable for listing ID: ' . $post_id);
         }
     }
 }
