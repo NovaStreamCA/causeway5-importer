@@ -1326,8 +1326,17 @@ class Causeway_Importer
             update_field('all_occurrences', $rows, $post_id);     // repeater
             update_field('next_occurrence',  $next, $post_id);    // single date_time_picker
 
-            // Ensure WPML marks translations as needing update / auto-translation without manual editor open.
-            self::trigger_wpml_translation_refresh($post_id);
+            // Only trigger WPML translation jobs when translatable listing payload changed.
+            self::maybe_trigger_wpml_translation_refresh($post_id, [
+                'post_title' => $post_title,
+                'post_content' => $description,
+                'highlights' => (string) ($item['highlights'] ?? ''),
+                'metaline' => (string) ($item['meta'] ?? ''),
+                'opengraph_title' => (string) ($item['opengraph_title'] ?? ''),
+                'opengraph_description' => (string) ($item['opengraph_description'] ?? ''),
+                'amenities' => self::normalize_term_payload($item['amenities'] ?? []),
+                // 'websites' => $websites,
+            ]);
 
             // Save ID of imported listing only if not stale
             $imported_ids[] = $causeway_id;
@@ -1935,19 +1944,119 @@ class Causeway_Importer
     }
 
     /**
-     * Ask WPML TM to refresh translation statuses for an imported source listing.
-     * This mirrors what happens when editing manually in wp-admin, but works during importer runs.
+     * Skip WPML translation refresh unless translatable data has actually changed.
+     */
+    private static function maybe_trigger_wpml_translation_refresh(int $post_id, array $translation_payload): void
+    {
+        $meta_key = '_causeway_translation_fingerprint';
+        $current_fingerprint = self::build_translation_fingerprint($translation_payload);
+        $previous_fingerprint = (string) get_post_meta($post_id, $meta_key, true);
+
+        if ($previous_fingerprint !== '' && hash_equals($previous_fingerprint, $current_fingerprint)) {
+            self::log('🌐 WPML translation skipped (no translatable changes) for listing ID: ' . $post_id);
+            return;
+        }
+
+        update_post_meta($post_id, $meta_key, $current_fingerprint);
+
+        if ($previous_fingerprint === '') {
+            self::log('🌐 WPML translation fingerprint initialized for listing ID: ' . $post_id);
+        } else {
+            self::log('🌐 WPML translation fingerprint changed for listing ID: ' . $post_id);
+        }
+
+        self::trigger_wpml_translation_refresh($post_id);
+    }
+
+    private static function build_translation_fingerprint(array $payload): string
+    {
+        $normalized = self::normalize_for_fingerprint($payload);
+        $json = wp_json_encode($normalized);
+        if (!is_string($json)) {
+            $json = serialize($normalized);
+        }
+
+        return hash('sha256', $json);
+    }
+
+    private static function normalize_for_fingerprint($value)
+    {
+        if (is_array($value)) {
+            if (self::is_assoc_array($value)) {
+                ksort($value);
+            }
+
+            foreach ($value as $key => $item) {
+                $value[$key] = self::normalize_for_fingerprint($item);
+            }
+
+            return $value;
+        }
+
+        if (is_object($value)) {
+            return self::normalize_for_fingerprint(get_object_vars($value));
+        }
+
+        return $value;
+    }
+
+    private static function is_assoc_array(array $value): bool
+    {
+        if ($value === []) {
+            return false;
+        }
+
+        return array_keys($value) !== range(0, count($value) - 1);
+    }
+
+    private static function normalize_term_payload(array $items): array
+    {
+        $normalized = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $normalized[] = [
+                'id' => (int) ($item['id'] ?? 0),
+                'name' => (string) ($item['name'] ?? ''),
+                'slug' => (string) ($item['slug'] ?? ''),
+            ];
+        }
+
+        usort($normalized, static function (array $a, array $b): int {
+            if ($a['id'] !== $b['id']) {
+                return $a['id'] <=> $b['id'];
+            }
+            if ($a['name'] !== $b['name']) {
+                return strcmp($a['name'], $b['name']);
+            }
+
+            return strcmp($a['slug'], $b['slug']);
+        });
+
+        return $normalized;
+    }
+
+    /**
+     * Create WPML translation jobs for imported source listings so auto-translation can run.
+     * This mirrors the behavior of clicking "Edit translation" in WPML, but runs during imports.
      */
     private static function trigger_wpml_translation_refresh(int $post_id): void
     {
         if ($post_id <= 0 || !has_filter('wpml_default_language')) {
+            self::log('⚠️ WPML integration skipped: default language filter missing or invalid post ID for listing ID: ' . $post_id);
             return;
         }
 
         $post = get_post($post_id);
         if (!$post || $post->post_type !== 'listing') {
+            self::log('⚠️ WPML integration skipped: post not found or not a listing for post ID: ' . $post_id);
             return;
         }
+
+        self::log('🌐 WPML integration start for listing ID: ' . $post_id);
 
         // Only trigger from the source/default language post.
         $default_lang = apply_filters('wpml_default_language', null);
@@ -1956,23 +2065,69 @@ class Causeway_Importer
             'element_type' => 'post_' . $post->post_type,
         ]);
         if (is_string($default_lang) && $default_lang !== '' && is_string($post_lang) && $post_lang !== '' && $post_lang !== $default_lang) {
+            self::log('⚠️ WPML integration skipped: post language ' . $post_lang . ' is not default language ' . $default_lang . ' for listing ID: ' . $post_id);
             return;
         }
 
-        // Imports may run outside normal wp-admin flows where TM hooks are not loaded yet.
-        if (!has_action('wpml_tm_save_post')) {
-            $tm_loader = WP_PLUGIN_DIR . '/sitepress-multilingual-cms/inc/functions-load-tm.php';
-            if (file_exists($tm_loader)) {
-                require_once $tm_loader;
+        // Let WPML's automatic translation listeners run when available.
+        do_action('wpml_after_save_post', $post_id);
+        self::log('🌐 WPML after-save hook fired for listing ID: ' . $post_id);
+
+        // Fallback: explicitly create local WPML jobs per target language.
+        global $wpml_translation_job_factory;
+        if (!is_object($wpml_translation_job_factory) || !method_exists($wpml_translation_job_factory, 'create_local_post_job')) {
+            self::log('⚠️ WPML translation job factory unavailable; skipping job creation for listing ID: ' . $post_id);
+            return;
+        }
+
+        $langs = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
+        if (!is_array($langs) || empty($langs)) {
+            self::log('⚠️ WPML active languages unavailable; skipping job creation for listing ID: ' . $post_id);
+            return;
+        }
+
+        self::log('🌐 WPML active languages loaded for listing ID ' . $post_id . ': ' . implode(',', array_keys($langs)));
+
+        $created = 0;
+        foreach ($langs as $lang_code => $lang_data) {
+            if (!is_string($lang_code) || $lang_code === '' || $lang_code === $default_lang) {
+                continue;
+            }
+
+            try {
+                $job_id = $wpml_translation_job_factory->create_local_post_job($post_id, $lang_code);
+                if ($job_id) {
+                    $created++;
+                    self::log('🌐 WPML job created for listing ID ' . $post_id . ' [' . $lang_code . '] job ID: ' . $job_id);
+
+                    if (class_exists('\\WPML\\TM\\API\\Jobs')) {
+                        $job_meta = \WPML\TM\API\Jobs::get((int) $job_id);
+                        if (is_object($job_meta)) {
+                            $automatic = !empty($job_meta->automatic) ? 1 : 0;
+                            $status = isset($job_meta->status) ? (string) $job_meta->status : 'unknown';
+                            self::log('🌐 WPML job meta for listing ID ' . $post_id . ' [' . $lang_code . '] job ID ' . $job_id . ': automatic=' . $automatic . ', status=' . $status);
+                        }
+                    }
+                } else {
+                    self::log('⚠️ WPML job factory returned no job for listing ID ' . $post_id . ' [' . $lang_code . ']');
+                }
+            } catch (\Throwable $e) {
+                self::log('❌ WPML job creation failed for listing ' . $post_id . ' [' . $lang_code . ']: ' . $e->getMessage());
             }
         }
 
-        if (!has_action('wpml_tm_save_post')) {
-            self::log('⚠️ WPML TM save_post hook unavailable; skipping translation refresh for listing ID: ' . $post_id);
-            return;
+        if ($created > 0) {
+            self::log('🌐 WPML translation jobs created for listing ID ' . $post_id . ': ' . $created);
+        } else {
+            self::log('⚠️ WPML created zero translation jobs for listing ID: ' . $post_id);
         }
 
-        do_action('wpml_tm_save_post', $post_id, $post, false);
-        self::log('🌐 WPML translation refresh triggered for listing ID: ' . $post_id);
+        // Keep status metadata fresh for TM dashboard states.
+        if (has_action('wpml_tm_save_post')) {
+            do_action('wpml_tm_save_post', $post_id, $post, false);
+            self::log('🌐 WPML TM save_post fired for listing ID: ' . $post_id);
+        } else {
+            self::log('⚠️ WPML TM save_post action unavailable for listing ID: ' . $post_id);
+        }
     }
 }
