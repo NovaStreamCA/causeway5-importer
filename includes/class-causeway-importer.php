@@ -1326,6 +1326,9 @@ class Causeway_Importer
             update_field('all_occurrences', $rows, $post_id);     // repeater
             update_field('next_occurrence',  $next, $post_id);    // single date_time_picker
 
+            // Ensure WPML marks translations as needing update / auto-translation without manual editor open.
+            self::trigger_wpml_translation_refresh($post_id);
+
             // Save ID of imported listing only if not stale
             $imported_ids[] = $causeway_id;
 
@@ -1929,5 +1932,47 @@ class Causeway_Importer
                 self::log("🗑️ Deleted duplicate listing {$del_id} for Causeway ID {$cid}; kept {$keep}");
             }
         }
+    }
+
+    /**
+     * Ask WPML TM to refresh translation statuses for an imported source listing.
+     * This mirrors what happens when editing manually in wp-admin, but works during importer runs.
+     */
+    private static function trigger_wpml_translation_refresh(int $post_id): void
+    {
+        if ($post_id <= 0 || !has_filter('wpml_default_language')) {
+            return;
+        }
+
+        $post = get_post($post_id);
+        if (!$post || $post->post_type !== 'listing') {
+            return;
+        }
+
+        // Only trigger from the source/default language post.
+        $default_lang = apply_filters('wpml_default_language', null);
+        $post_lang = apply_filters('wpml_element_language_code', null, [
+            'element_id' => $post_id,
+            'element_type' => 'post_' . $post->post_type,
+        ]);
+        if (is_string($default_lang) && $default_lang !== '' && is_string($post_lang) && $post_lang !== '' && $post_lang !== $default_lang) {
+            return;
+        }
+
+        // Imports may run outside normal wp-admin flows where TM hooks are not loaded yet.
+        if (!has_action('wpml_tm_save_post')) {
+            $tm_loader = WP_PLUGIN_DIR . '/sitepress-multilingual-cms/inc/functions-load-tm.php';
+            if (file_exists($tm_loader)) {
+                require_once $tm_loader;
+            }
+        }
+
+        if (!has_action('wpml_tm_save_post')) {
+            self::log('⚠️ WPML TM save_post hook unavailable; skipping translation refresh for listing ID: ' . $post_id);
+            return;
+        }
+
+        do_action('wpml_tm_save_post', $post_id, $post, false);
+        self::log('🌐 WPML translation refresh triggered for listing ID: ' . $post_id);
     }
 }
