@@ -138,6 +138,12 @@ add_action('admin_post_causeway_manual_import', function () {
         wp_die('Invalid nonce');
     }
 
+    if (!causeway_is_importer_enabled()) {
+        error_log('[Causeway] Manual import blocked: importer is disabled in settings');
+        wp_redirect(add_query_arg('import_disabled', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
+        exit;
+    }
+
     // Atomic lock using transient to prevent race conditions
     // Check if lock already exists
     $existing_lock = get_transient('causeway_import_lock');
@@ -212,6 +218,12 @@ add_action('admin_post_causeway_manual_import_taxonomies', function () {
 
     if (!isset($_POST['causeway_import_taxonomies_nonce']) || !wp_verify_nonce($_POST['causeway_import_taxonomies_nonce'], 'causeway_import_taxonomies_action')) {
         wp_die('Invalid nonce');
+    }
+
+    if (!causeway_is_importer_enabled()) {
+        error_log('[Causeway] Manual taxonomy-only import blocked: importer is disabled in settings');
+        wp_redirect(add_query_arg('import_disabled', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
+        exit;
     }
 
     // Atomic lock using transient to prevent race conditions
@@ -297,6 +309,10 @@ add_action('admin_post_causeway_manual_export', function () {
         wp_die('Unauthorized or nonce check failed.');
     }
 
+    if (!causeway_is_exporter_enabled()) {
+        wp_die('Export is disabled: Causeway exporter is disabled in settings.');
+    }
+
     // Gate export logic for non-headless installations
     if (!get_field('is_headless', 'option')) {
         wp_die('Export is disabled: this site is not configured as headless.');
@@ -344,6 +360,34 @@ function causeway_is_auto_cron_enabled(): bool
 {
     if (function_exists('get_field')) {
         $val = get_field('causeway_enable_auto_cron', 'option');
+        // Default to enabled if field not yet saved
+        if ($val === null || $val === '') {
+            return true;
+        }
+        return (bool) $val;
+    }
+
+    return true;
+}
+
+function causeway_is_importer_enabled(): bool
+{
+    if (function_exists('get_field')) {
+        $val = get_field('causeway_enable_importer', 'option');
+        // Default to enabled if field not yet saved
+        if ($val === null || $val === '') {
+            return true;
+        }
+        return (bool) $val;
+    }
+
+    return true;
+}
+
+function causeway_is_exporter_enabled(): bool
+{
+    if (function_exists('get_field')) {
+        $val = get_field('causeway_enable_exporter', 'option');
         // Default to enabled if field not yet saved
         if ($val === null || $val === '') {
             return true;
@@ -460,6 +504,11 @@ add_action('causeway_cron_taxonomies_hook', 'run_causeway_taxonomy_import');
 
 function run_causeway_import_export()
 {
+    if (!causeway_is_importer_enabled()) {
+        error_log('Skipping Causeway import/export via cron: importer disabled');
+        return;
+    }
+
     error_log('🕑 Running Causeway import/export via cron @ ' . date('Y-m-d H:i:s'));
 
     // Check if another import is already running. If state is 'queued', proceed (manual button pre-acquired the lock).
@@ -497,6 +546,11 @@ function run_causeway_import_export()
 
 function run_causeway_taxonomy_import()
 {
+    if (!causeway_is_importer_enabled()) {
+        error_log('Skipping Causeway taxonomy-only import via cron: importer disabled');
+        return;
+    }
+
     error_log('🕑 Running Causeway taxonomy-only import via cron @ ' . date('Y-m-d H:i:s'));
 
     $existing_lock = get_transient('causeway_import_lock');
@@ -533,6 +587,11 @@ function run_causeway_taxonomy_import()
 
 function run_causeway_export()
 {
+    if (!causeway_is_exporter_enabled()) {
+        error_log('Skipping Causeway export via cron: exporter disabled');
+        return;
+    }
+
     if (!get_field('is_headless', 'option')) {
         error_log('Skipping Causeway export via cron: not headless');
         return;
@@ -565,6 +624,11 @@ function clear_causeway_status()
  */
 function causeway_try_spawn_cli_import(): bool
 {
+    if (!causeway_is_importer_enabled()) {
+        error_log('[Causeway] CLI import spawn blocked: importer is disabled in settings');
+        return false;
+    }
+
     // Ensure exec/proc_open are permitted
     $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
     $can_exec = function_exists('exec') && !in_array('exec', $disabled, true);
@@ -646,6 +710,11 @@ function causeway_try_spawn_cli_import(): bool
  */
 function causeway_try_spawn_cli_taxonomy_import(): bool
 {
+    if (!causeway_is_importer_enabled()) {
+        error_log('[Causeway] CLI taxonomy-only import spawn blocked: importer is disabled in settings');
+        return false;
+    }
+
     // Ensure exec/proc_open are permitted
     $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
     $can_exec = function_exists('exec') && !in_array('exec', $disabled, true);
@@ -734,6 +803,10 @@ if (defined('WP_CLI') && WP_CLI) {
          */
         public function import()
         {
+            if (!causeway_is_importer_enabled()) {
+                WP_CLI::error('Causeway importer is disabled in settings.');
+            }
+
             $start = microtime(true);
 
             // Lift PHP limits if you like:
@@ -757,6 +830,10 @@ if (defined('WP_CLI') && WP_CLI) {
          */
         public function import_taxonomies()
         {
+            if (!causeway_is_importer_enabled()) {
+                WP_CLI::error('Causeway importer is disabled in settings.');
+            }
+
             $start = microtime(true);
 
             ini_set('memory_limit', '1G');

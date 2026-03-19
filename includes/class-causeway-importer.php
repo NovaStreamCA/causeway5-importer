@@ -16,6 +16,34 @@ class Causeway_Importer
     private static $processed_listings = 0;
     private static $current_phase = '';
 
+    private static function is_importer_enabled(): bool
+    {
+        if (function_exists('get_field')) {
+            $val = get_field('causeway_enable_importer', 'option');
+            // Default to enabled if field is not yet saved.
+            if ($val === null || $val === '') {
+                return true;
+            }
+            return (bool) $val;
+        }
+
+        return true;
+    }
+
+    private static function is_exporter_enabled(): bool
+    {
+        if (function_exists('get_field')) {
+            $val = get_field('causeway_enable_exporter', 'option');
+            // Default to enabled if field is not yet saved.
+            if ($val === null || $val === '') {
+                return true;
+            }
+            return (bool) $val;
+        }
+
+        return true;
+    }
+
     private static function update_status(array $data = []): void
     {
         // Merge with existing
@@ -85,6 +113,18 @@ class Causeway_Importer
 
     public static function import()
     {
+        if (!self::is_importer_enabled()) {
+            self::log('⏸ Import skipped: importer is disabled in settings.');
+            self::update_status([
+                'running' => false,
+                'state' => 'disabled',
+                'phase' => 'disabled',
+                'updated_at' => time(),
+            ]);
+            delete_transient('causeway_import_lock');
+            return;
+        }
+
         self::log('start import');
         self::$total_listings = 0;
         self::$processed_listings = 0;
@@ -175,12 +215,29 @@ class Causeway_Importer
     }
 
     public static function export() {
+        if (!self::is_exporter_enabled()) {
+            self::log('⏸ Export skipped: exporter is disabled in settings.');
+            return;
+        }
+
         self::export_listings();
     }
 
     // Run only taxonomy imports (types, categories, amenities, seasons, campaigns, areas/communities/regions/counties)
     public static function import_taxonomies_only(): void
     {
+        if (!self::is_importer_enabled()) {
+            self::log('⏸ Taxonomy-only import skipped: importer is disabled in settings.');
+            self::update_status([
+                'running' => false,
+                'state' => 'disabled',
+                'phase' => 'disabled',
+                'updated_at' => time(),
+            ]);
+            delete_transient('causeway_import_lock');
+            return;
+        }
+
         self::log('start taxonomy-only import');
 
         self::$total_listings = 0;
@@ -1506,6 +1563,11 @@ class Causeway_Importer
 
     public static function export_listings()
     {
+        if (!self::is_exporter_enabled()) {
+            self::log('⏸ Export notification skipped: exporter is disabled in settings.');
+            return;
+        }
+
         if (!get_field('is_headless', 'option')) {
             self::log('Skipping export notification: site not configured as headless');
             return;
