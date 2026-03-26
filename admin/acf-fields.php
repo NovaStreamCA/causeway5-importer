@@ -319,6 +319,27 @@ function causeway_register_acf_fields() {
                     'return_format' => 'Y-m-d',
                     'wrapper' => ['width' => '33'],
                 ],
+                [
+                    'key' => 'field_campaign_sections',
+                    'label' => 'Campaign Sections',
+                    'name' => 'campaign_sections',
+                    'type' => 'repeater',
+                    'sub_fields' => [
+                        [
+                            'key' => 'field_section_name',
+                            'label' => 'Section Name',
+                            'name' => 'section_name',
+                            'type' => 'text',
+                        ],
+                        [
+                            'key' => 'field_section_listing_ids',
+                            'label' => 'Section Listing IDs',
+                            'name' => 'section_listing_ids',
+                            'type' => 'text',
+                            'instructions' => 'Comma-separated listing IDs from the Causeway API',
+                        ],
+                    ],
+                ],
             ],
             'location' => [
                 [

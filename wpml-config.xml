@@ -64,6 +64,8 @@
     <custom-field action="copy">occurrence_start</custom-field>
     <custom-field action="copy">occurrence_end</custom-field>
     <custom-field action="copy">alert_color</custom-field>
+    <custom-field action="translate">section_name</custom-field>
+    <custom-field action="copy">section_listing_ids</custom-field>
 
     <!-- Translate fields -->
     <custom-field action="translate">opengraph_description</custom-field>

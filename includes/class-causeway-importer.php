@@ -668,6 +668,7 @@ class Causeway_Importer
             $causeway_id = $item['id'];
             $activated_at = $item['activated_at'] ?? null;
             $expired_at = $item['expired_at'] ?? null;
+            $campaign_sections = $item['campaign_sections'] ?? [];
 
             if (!$causeway_id) {
                 continue;
@@ -694,6 +695,26 @@ class Causeway_Importer
             update_field('causeway_id', $causeway_id, $acf_key);
             update_field('activated_at', $activated_at, $acf_key);
             update_field('expired_at', $expired_at, $acf_key);
+
+            // Process campaign sections
+            $sections = [];
+            foreach ($campaign_sections as $section) {
+                $section_name = $section['name'] ?? '';
+                $listing_ids = $section['listings'] ?? [];
+
+                if ($section_name) {
+                    $sections[] = [
+                        'section_name' => $section_name,
+                        'section_listing_ids' => implode(',', array_map('intval', $listing_ids)),
+                    ];
+                }
+            }
+
+            if (!empty($sections)) {
+                update_field('campaign_sections', $sections, $acf_key);
+            } else {
+                delete_field('campaign_sections', $acf_key);
+            }
 
             $imported_ids[] = $causeway_id;
         }
@@ -1052,7 +1073,9 @@ class Causeway_Importer
         $imported_ids = [];
 
         // Build base endpoint with status filter
-        $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
+        // TODO REENABLE
+        // $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
+        $endpoint = self::$baseURL . 'listings?search=listings_types.type_id&compare==&value=6';
 
         // Apply optional filters (Areas / Communities) from settings page
         $area_ids = get_field('import_filter_areas', 'option') ?: [];
