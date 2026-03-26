@@ -32,6 +32,7 @@ require_once plugin_dir_path(__FILE__) . 'admin/acf-fields.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-causeway-importer.php';
 require_once plugin_dir_path(__FILE__) . 'admin/class-causeway-admin.php';
 require_once plugin_dir_path(__FILE__) . 'includes/causeway-exporter.php';
+require_once plugin_dir_path(__FILE__) . 'includes/wpml-campaign-sections-sync.php';
 require_once plugin_dir_path(__FILE__) . 'includes/github-updater.php';
 require_once plugin_dir_path(__FILE__) . 'includes/helpers.php';
 require_once plugin_dir_path(__FILE__) . 'includes/listings-loop.php';

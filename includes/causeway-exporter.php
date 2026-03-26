@@ -254,6 +254,37 @@ function get_terms_with_acf(int $post_id, string $taxonomy, $include_parents = f
     return $result;
 }
 
+function add_campaign_section_translations(array &$node, array $translated_acf, string $lang_code): void
+{
+    if (empty($node['campaign_sections']) || !is_array($node['campaign_sections'])) {
+        return;
+    }
+
+    $translated_sections = $translated_acf['campaign_sections'] ?? [];
+    if (!is_array($translated_sections) || empty($translated_sections)) {
+        return;
+    }
+
+    foreach ($node['campaign_sections'] as $index => $section) {
+        if (!isset($translated_sections[$index]) || !is_array($translated_sections[$index])) {
+            continue;
+        }
+
+        $translated_name = $translated_sections[$index]['section_name'] ?? null;
+        if (!is_string($translated_name) || $translated_name === '') {
+            continue;
+        }
+
+        if (!isset($node['campaign_sections'][$index]['translations']) || !is_array($node['campaign_sections'][$index]['translations'])) {
+            $node['campaign_sections'][$index]['translations'] = [];
+        }
+
+        $node['campaign_sections'][$index]['translations'][$lang_code] = [
+            'section_name' => html_entity_decode($translated_name),
+        ];
+    }
+}
+
 
 /**
  * Build a term payload and follow its parents recursively.
@@ -330,6 +361,10 @@ function build_term_tree(int $term_id, string $taxonomy, $include_parents, array
                     ],
                     $t_acf ?: []
                 );
+
+                if ($taxonomy === 'listing-campaigns') {
+                    add_campaign_section_translations($node, $t_acf, $code);
+                }
             }
         }
     }
@@ -480,9 +515,15 @@ function get_taxonomy_terms_with_acf($request)
                         continue;
                     }
 
+                    $translated_acf = get_fields($taxonomy . '_' . $translated_term_id) ?: [];
+
                     $term_data['translations'][$lang_code] = [
                         'name' => html_entity_decode($translated_term->name),
                     ];
+
+                    if ($taxonomy === 'listing-campaigns') {
+                        add_campaign_section_translations($term_data, $translated_acf, $lang_code);
+                    }
                 }
             }
         }
