@@ -1073,9 +1073,8 @@ class Causeway_Importer
         $imported_ids = [];
 
         // Build base endpoint with status filter
-        // TODO REENABLE
-        // $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
-        $endpoint = self::$baseURL . 'listings?search=listings_types.type_id&compare==&value=6';
+        $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
+        // $endpoint = self::$baseURL . 'listings?search=listings_types.type_id&compare==&value=6';
 
         // Apply optional filters (Areas / Communities) from settings page
         $area_ids = get_field('import_filter_areas', 'option') ?: [];
