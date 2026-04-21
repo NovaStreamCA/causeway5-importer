@@ -1073,7 +1073,8 @@ class Causeway_Importer
         $imported_ids = [];
 
         // Build base endpoint with status filter
-        $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
+        $endpoint = self::$baseURL . 'listings?search=listings.id&compare==&value=1647';
+        // $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
         // $endpoint = self::$baseURL . 'listings?search=listings_types.type_id&compare==&value=6';
 
         // Apply optional filters (Areas / Communities) from settings page
@@ -1365,6 +1366,7 @@ class Causeway_Importer
 
             // ②  Derive and store occurrences + next upcoming (events get ALL occurrences; non-events limited to current year)
             [$rows, $next] = self::build_occurrences_for_acf($dates, $is_event_type);
+            self::log_occurrence_debug($post_id, (int) $causeway_id, (string) $slug, $dates, $rows, $next, $is_event_type);
 
             // if last row in rows end date is in future do not do the skip below
 
@@ -1682,7 +1684,8 @@ class Causeway_Importer
     private static function delete_old_listings($imported_ids)
     {
         self::log("Deleting old listings...");
-
+        // TODO - temp
+    return;
         if (empty($imported_ids)) {
             self::log("⚠️ No imported IDs provided. Skipping deletion.");
             return;
@@ -1750,6 +1753,8 @@ class Causeway_Importer
 
     private static function delete_old_terms($taxonomy, $imported_ids)
     {
+        // TODO - temp
+    return;
         if (empty($imported_ids)) {
             return;
         }
@@ -1803,8 +1808,17 @@ class Causeway_Importer
                 continue;
             }
 
-            // Derive duration (in minutes) without mutating year for events
-            $duration = $end->diffInMinutes($start);
+            // Derive occurrence duration (in minutes).
+            // Some API payloads put series end (UNTIL-like) in end_at for RRULE entries.
+            // In that case, compute duration from time-of-day instead of full date span.
+            $duration = $start->diffInMinutes($end, true);
+            if (!empty($entry['rrule']) && $duration > 1440) {
+                $normalized_end = $start->copy()->setTimeFromTimeString($end->format('H:i:s'));
+                if ($normalized_end->lessThanOrEqualTo($start)) {
+                    $normalized_end->addDay();
+                }
+                $duration = $start->diffInMinutes($normalized_end, true);
+            }
 
             if (!empty($entry['rrule'])) {
                 $rr = $entry['rrule'];
@@ -1812,17 +1826,21 @@ class Causeway_Importer
                 if ($is_event) {
                     // Get all occurrences as defined by RRULE (can be large)
                     foreach ($rrule->getOccurrences() as $occ) {
+                        $occ_start = Carbon::instance(clone $occ)->setTimezone($tz);
+                        $occ_end = $occ_start->copy()->addMinutes($duration);
                         $rows[] = [
-                            'occurrence_start' => $occ->setTimezone($tz)->format('Y-m-d H:i:s'),
-                            'occurrence_end'   => $occ->modify("+{$duration} minutes")->setTimezone($tz)->format('Y-m-d H:i:s'),
+                            'occurrence_start' => $occ_start->format('Y-m-d H:i:s'),
+                            'occurrence_end'   => $occ_end->format('Y-m-d H:i:s'),
                         ];
                     }
                 } else {
                     // Constrain to single calendar year for non-event listings
                     foreach ($rrule->getOccurrencesBetween($range_start, $range_end) as $occ) {
+                        $occ_start = Carbon::instance(clone $occ)->setTimezone($tz);
+                        $occ_end = $occ_start->copy()->addMinutes($duration);
                         $rows[] = [
-                            'occurrence_start' => $occ->setTimezone($tz)->format('Y-m-d H:i:s'),
-                            'occurrence_end'   => $occ->modify("+{$duration} minutes")->setTimezone($tz)->format('Y-m-d H:i:s'),
+                            'occurrence_start' => $occ_start->format('Y-m-d H:i:s'),
+                            'occurrence_end'   => $occ_end->format('Y-m-d H:i:s'),
                         ];
                     }
                 }
@@ -1857,6 +1875,43 @@ class Causeway_Importer
         }
 
         return [$rows, $next];
+    }
+
+    private static function log_occurrence_debug(
+        int $post_id,
+        int $causeway_id,
+        string $slug,
+        array $dates,
+        array $rows,
+        $next,
+        bool $is_event
+    ): void {
+        if (empty($dates)) {
+            return;
+        }
+
+        $sample_dates = [];
+        foreach (array_slice($dates, 0, 3) as $d) {
+            $sample_dates[] = [
+                'start_at' => (string) ($d['start_at'] ?? ''),
+                'end_at' => (string) ($d['end_at'] ?? ''),
+                'rrule' => (string) ($d['rrule'] ?? ''),
+            ];
+        }
+
+        $sample_rows = array_slice($rows, 0, 5);
+        $last_row = !empty($rows) ? $rows[count($rows) - 1] : null;
+
+        self::log('🧪 Occurrence debug for listing ID ' . $post_id . ' (Causeway ID: ' . $causeway_id . ', slug: ' . $slug . ')');
+        self::log([
+            'is_event' => $is_event ? 1 : 0,
+            'input_dates_count' => count($dates),
+            'sample_input_dates' => $sample_dates,
+            'generated_rows_count' => count($rows),
+            'next_occurrence' => $next,
+            'sample_generated_rows' => $sample_rows,
+            'last_generated_row' => $last_row,
+        ]);
     }
 
     private static function log($message): void
