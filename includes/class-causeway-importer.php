@@ -1366,7 +1366,7 @@ class Causeway_Importer
 
             // ②  Derive and store occurrences + next upcoming (events get ALL occurrences; non-events limited to current year)
             [$rows, $next] = self::build_occurrences_for_acf($dates, $is_event_type);
-            self::log_occurrence_debug($post_id, (int) $causeway_id, (string) $slug, $dates, $rows, $next, $is_event_type);
+            // self::log_occurrence_debug($post_id, (int) $causeway_id, (string) $slug, $dates, $rows, $next, $is_event_type);
 
             // if last row in rows end date is in future do not do the skip below
 
