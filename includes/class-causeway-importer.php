@@ -1073,9 +1073,9 @@ class Causeway_Importer
         $imported_ids = [];
 
         // Build base endpoint with status filter
-        $endpoint = self::$baseURL . 'listings?search=listings.id&compare==&value=1647';
-        // $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
-        // $endpoint = self::$baseURL . 'listings?search=listings_types.type_id&compare==&value=6';
+        // $endpoint = self::$baseURL . 'listings?search=listings.id&compare==&value=1647';
+        $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
+        // $endpoint = self::$baseURL . 'listings?search=listings_types.type_id&compare==&value=3';
 
         // Apply optional filters (Areas / Communities) from settings page
         $area_ids = get_field('import_filter_areas', 'option') ?: [];
@@ -1684,8 +1684,6 @@ class Causeway_Importer
     private static function delete_old_listings($imported_ids)
     {
         self::log("Deleting old listings...");
-        // TODO - temp
-    return;
         if (empty($imported_ids)) {
             self::log("⚠️ No imported IDs provided. Skipping deletion.");
             return;
@@ -1753,8 +1751,6 @@ class Causeway_Importer
 
     private static function delete_old_terms($taxonomy, $imported_ids)
     {
-        // TODO - temp
-    return;
         if (empty($imported_ids)) {
             return;
         }
@@ -1791,87 +1787,124 @@ class Causeway_Importer
      * @return array [$rows, $nextString]
      */
     private static function build_occurrences_for_acf(array $dates, bool $is_event = false): array {
-        $tz      = new DateTimeZone('UTC');
-        $format  = 'Y-m-d H:i:s'; // incoming API format
-        $rows    = [];
+        $site_tz = function_exists('wp_timezone')
+            ? wp_timezone()
+            : new DateTimeZone(get_option('timezone_string') ?: 'UTC');
+        $format = 'Y-m-d H:i:s';
+        $rows_with_ts = [];
 
-        // For non-events, restrict to current calendar year; for events, include ALL occurrences
-        $year = (int) Carbon::now($tz)->year;
-        $range_start = Carbon::create($year,1,1,0,0,0,$tz);
-        $range_end   = Carbon::create($year,12,31,23,59,59,$tz);
+        $extract_tzid = static function (string $rrule_text): ?string {
+            if ($rrule_text === '') {
+                return null;
+            }
+            if (preg_match('/DTSTART\s*;\s*TZID\s*=\s*([^:\s]+)\s*:/i', $rrule_text, $m) === 1) {
+                $tzid = trim((string) ($m[1] ?? ''));
+                return $tzid !== '' ? $tzid : null;
+            }
+            return null;
+        };
+
+        $parse_datetime = static function (string $value, DateTimeZone $tz, string $fmt): ?Carbon {
+            $value = trim($value);
+            if ($value === '') {
+                return null;
+            }
+
+            try {
+                if (preg_match('/(Z|[+-]\d{2}:?\d{2}|[A-Za-z_]+\/[A-Za-z_]+)$/', $value) === 1 || strpos($value, 'T') !== false) {
+                    return Carbon::parse($value)->setTimezone($tz);
+                }
+
+                // Legacy Causeway payload without timezone is treated as UTC and then localized.
+                $parsed = Carbon::createFromFormat($fmt, $value, 'UTC');
+                return $parsed ? $parsed->setTimezone($tz) : null;
+            } catch (\Throwable $e) {
+                return null;
+            }
+        };
 
         foreach ($dates as $entry) {
-            $start = Carbon::createFromFormat($format, $entry['start_at'] ?? '', $tz);
-            $end   = Carbon::createFromFormat($format, $entry['end_at']   ?? '', $tz);
+            $rrule_text = (string) ($entry['rrule'] ?? '');
+            $entry_tz = $site_tz;
+            $tzid = $extract_tzid($rrule_text);
+            if ($tzid) {
+                try {
+                    $entry_tz = new DateTimeZone($tzid);
+                } catch (\Throwable $e) {
+                    $entry_tz = $site_tz;
+                }
+            }
+
+            $start = $parse_datetime((string) ($entry['start_at'] ?? ''), $entry_tz, $format);
+            $end = $parse_datetime((string) ($entry['end_at'] ?? ''), $entry_tz, $format);
             if (!$start || !$end) {
                 self::log('Invalid date: ' . json_encode($entry));
                 continue;
             }
 
-            // Derive occurrence duration (in minutes).
-            // Some API payloads put series end (UNTIL-like) in end_at for RRULE entries.
-            // In that case, compute duration from time-of-day instead of full date span.
-            $duration = $start->diffInMinutes($end, true);
-            if (!empty($entry['rrule']) && $duration > 1440) {
-                $normalized_end = $start->copy()->setTimeFromTimeString($end->format('H:i:s'));
-                if ($normalized_end->lessThanOrEqualTo($start)) {
-                    $normalized_end->addDay();
-                }
-                $duration = $start->diffInMinutes($normalized_end, true);
-            }
+            $start_clock = $start->copy()->setTimezone($entry_tz)->format('H:i:s');
+            $end_clock = $end->copy()->setTimezone($entry_tz)->format('H:i:s');
+            $entry_year = (int) Carbon::now($entry_tz)->year;
+            $range_start = Carbon::create($entry_year, 1, 1, 0, 0, 0, $entry_tz);
+            $range_end = Carbon::create($entry_year, 12, 31, 23, 59, 59, $entry_tz);
 
-            if (!empty($entry['rrule'])) {
-                $rr = $entry['rrule'];
-                $rrule = new RRule($rr);
-                if ($is_event) {
-                    // Get all occurrences as defined by RRULE (can be large)
-                    foreach ($rrule->getOccurrences() as $occ) {
-                        $occ_start = Carbon::instance(clone $occ)->setTimezone($tz);
-                        $occ_end = $occ_start->copy()->addMinutes($duration);
-                        $rows[] = [
-                            'occurrence_start' => $occ_start->format('Y-m-d H:i:s'),
-                            'occurrence_end'   => $occ_end->format('Y-m-d H:i:s'),
-                        ];
+            if ($rrule_text !== '') {
+                try {
+                    $rrule = new RRule($rrule_text);
+                } catch (\Throwable $e) {
+                    self::log('Invalid RRULE: ' . $rrule_text);
+                    continue;
+                }
+
+                $occurrences = $is_event
+                    ? $rrule->getOccurrences()
+                    : $rrule->getOccurrencesBetween($range_start, $range_end);
+
+                foreach ($occurrences as $occ) {
+                    $occ_base = Carbon::instance(clone $occ)->setTimezone($entry_tz);
+                    $occ_start = $occ_base->copy()->setTimeFromTimeString($start_clock);
+                    $occ_end = $occ_base->copy()->setTimeFromTimeString($end_clock);
+                    if ($occ_end->lessThanOrEqualTo($occ_start)) {
+                        $occ_end->addDay();
                     }
-                } else {
-                    // Constrain to single calendar year for non-event listings
-                    foreach ($rrule->getOccurrencesBetween($range_start, $range_end) as $occ) {
-                        $occ_start = Carbon::instance(clone $occ)->setTimezone($tz);
-                        $occ_end = $occ_start->copy()->addMinutes($duration);
-                        $rows[] = [
-                            'occurrence_start' => $occ_start->format('Y-m-d H:i:s'),
-                            'occurrence_end'   => $occ_end->format('Y-m-d H:i:s'),
-                        ];
-                    }
+
+                    $occ_start_utc = $occ_start->copy()->setTimezone('UTC');
+                    $occ_end_utc = $occ_end->copy()->setTimezone('UTC');
+
+                    $rows_with_ts[] = [
+                        'occurrence_start' => $occ_start_utc->format('Y-m-d H:i:s'),
+                        'occurrence_end' => $occ_end_utc->format('Y-m-d H:i:s'),
+                        '_start_ts' => $occ_start_utc->getTimestamp(),
+                    ];
                 }
             } else {
-                if ($is_event) {
-                    // Keep original start/end untouched
-                    $rows[] = [
-                        'occurrence_start' => $start->format('Y-m-d H:i:s'),
-                        'occurrence_end'   => $end->format('Y-m-d H:i:s'),
-                    ];
-                } else {
-                    // Force to current year (maintain original month/day/time)
-                    $start_clone = $start->copy()->year($year);
-                    $end_clone   = $end->copy()->year($year);
-                    $rows[] = [
-                        'occurrence_start' => $start_clone->format('Y-m-d H:i:s'),
-                        'occurrence_end'   => $end_clone->format('Y-m-d H:i:s'),
-                    ];
-                }
+                $occ_start = $is_event ? $start->copy() : $start->copy()->year($entry_year);
+                $occ_end = $is_event ? $end->copy() : $end->copy()->year($entry_year);
+
+                $occ_start_utc = $occ_start->copy()->setTimezone('UTC');
+                $occ_end_utc = $occ_end->copy()->setTimezone('UTC');
+
+                $rows_with_ts[] = [
+                    'occurrence_start' => $occ_start_utc->format('Y-m-d H:i:s'),
+                    'occurrence_end' => $occ_end_utc->format('Y-m-d H:i:s'),
+                    '_start_ts' => $occ_start_utc->getTimestamp(),
+                ];
             }
         }
 
-        usort($rows, fn($a,$b) => strcmp($a['occurrence_start'], $b['occurrence_start']));
+        usort($rows_with_ts, static function (array $a, array $b): int {
+            return ($a['_start_ts'] ?? 0) <=> ($b['_start_ts'] ?? 0);
+        });
 
-        $now  = Carbon::now($tz)->format('Y-m-d H:i:s');
+        $now_ts = Carbon::now('UTC')->getTimestamp();
+        $rows = [];
         $next = null;
-        foreach ($rows as $r) {
-            if ($r['occurrence_start'] >= $now) {
-                $next = $r['occurrence_start'];
-                break;
+        foreach ($rows_with_ts as $row) {
+            if ($next === null && (int) ($row['_start_ts'] ?? 0) >= $now_ts) {
+                $next = $row['occurrence_start'];
             }
+            unset($row['_start_ts']);
+            $rows[] = $row;
         }
 
         return [$rows, $next];
