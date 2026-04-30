@@ -1621,12 +1621,22 @@ class Causeway_Importer
                 ]),
             ]);
 
-            if (is_wp_error($response)) {
+            $export_success = !is_wp_error($response);
+
+            if (!$export_success) {
                 self::log('❌ Failed to notify public site. ' . $endpoint);
                 // self::log($response);
             } else {
                 self::log('✅ Public site received data at ' . $endpoint);
             }
+
+            /**
+             * Fires when Causeway export notification request completes.
+             *
+             * @param bool   $export_success Whether wp_remote_post() succeeded.
+             * @param string $endpoint       Destination endpoint URL.
+             */
+            do_action('causeway_exporter_completed', $export_success, $endpoint);
 
             return;
         } else {
