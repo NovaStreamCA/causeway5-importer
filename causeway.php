@@ -4,7 +4,7 @@
 /**
  * Plugin Name: Causeway Listings Importer
  * Description: Imports listings and taxonomies from Causeway API into WordPress with WPML and ACF integration.
- * Version: 1.1.11
+ * Version: 1.1.12
  * Author: NovaStream
  * Update URI: https://github.com/NovaStreamCA/causeway5-importer
  * 
