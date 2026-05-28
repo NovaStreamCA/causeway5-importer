@@ -223,6 +223,88 @@ class Causeway_Importer
         self::export_listings();
     }
 
+    // Run only listing imports (assumes taxonomies already exist)
+    public static function import_listings_only(): void
+    {
+        if (!self::is_importer_enabled()) {
+            self::log('⏸ Listings-only import skipped: importer is disabled in settings.');
+            self::update_status([
+                'running' => false,
+                'state' => 'disabled',
+                'phase' => 'disabled',
+                'updated_at' => time(),
+            ]);
+            delete_transient('causeway_import_lock');
+            return;
+        }
+
+        self::log('start listings-only import');
+
+        self::$total_listings = 0;
+        self::$processed_listings = 0;
+        self::$listing_map = [];
+        self::set_phase('bootstrap');
+        self::update_status(['running' => true, 'state' => 'running', 'started_at' => time()]);
+        register_shutdown_function([self::class, 'shutdown_handler']);
+
+        $baseURL = get_field('causeway_api_url', 'option');
+        if ($baseURL) {
+            self::$baseURL = $baseURL;
+        }
+
+        /* FORCE ENGLISH */
+        $orig_lang = apply_filters('wpml_current_language', null);
+        do_action('wpml_switch_language', 'en');
+
+        if (!defined('CAUSEWAY_IMPORTING')) {
+            define('CAUSEWAY_IMPORTING', true);
+        }
+
+        self::$start = microtime(true);
+
+        try {
+            if (function_exists('set_time_limit')) {
+                @set_time_limit(0);
+            }
+            if (function_exists('wp_suspend_cache_addition')) {
+                wp_suspend_cache_addition(true);
+            }
+            wp_defer_term_counting(true);
+
+            self::import_listings();
+
+            self::log('✅ Listings-only import completed @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+
+            // Keep behavior consistent with other import modes: best-effort export afterwards.
+            self::export_listings();
+
+            self::set_phase('done');
+            self::update_status(['running' => false, 'state' => 'done', 'percent' => 1.0]);
+        } catch (Throwable $e) {
+            self::update_status([
+                'running' => false,
+                'state' => 'error',
+                'phase' => 'error',
+                'error_message' => $e->getMessage(),
+            ]);
+            throw $e;
+        } finally {
+            wp_defer_term_counting(false);
+            if (function_exists('wp_suspend_cache_addition')) {
+                wp_suspend_cache_addition(false);
+            }
+
+            // Release the import lock
+            delete_transient('causeway_import_lock');
+            self::log('🔓 Released import lock');
+
+            // Restore language (best-effort)
+            if (is_string($orig_lang) && $orig_lang !== '') {
+                do_action('wpml_switch_language', $orig_lang);
+            }
+        }
+    }
+
     // Run only taxonomy imports (types, categories, amenities, seasons, campaigns, areas/communities/regions/counties)
     public static function import_taxonomies_only(): void
     {

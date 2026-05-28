@@ -50,6 +50,9 @@ class Causeway_Admin {
         if (isset($_GET['taxonomies_queued']) && $_GET['taxonomies_queued'] === '1') {
             echo '<div class="notice notice-info is-dismissible"><p>🕑 Taxonomy-only import scheduled. It will run in the background shortly.</p></div>';
         }
+        if (isset($_GET['listings_queued']) && $_GET['listings_queued'] === '1') {
+            echo '<div class="notice notice-info is-dismissible"><p>🕑 Listings-only import scheduled. It will run in the background shortly.</p></div>';
+        }
         if (isset($_GET['import_running']) && $_GET['import_running'] === '1') {
             echo '<div class="notice notice-warning is-dismissible"><p>⚠️ An import is already running. You can watch progress below.</p></div>';
         }
@@ -113,6 +116,12 @@ class Causeway_Admin {
             <?php wp_nonce_field('causeway_import_taxonomies_action', 'causeway_import_taxonomies_nonce'); ?>
             <input type="hidden" name="action" value="causeway_manual_import_taxonomies">
             <input type="submit" name="causeway_import_taxonomies_submit" class="button button-secondary" value="Import Only Taxonomies" <?php echo $running ? 'disabled' : ''; ?>>
+        </form>
+
+        <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="margin:0;">
+            <?php wp_nonce_field('causeway_import_listings_action', 'causeway_import_listings_nonce'); ?>
+            <input type="hidden" name="action" value="causeway_manual_import_listings">
+            <input type="submit" name="causeway_import_listings_submit" class="button button-secondary" value="Import Only Listings" <?php echo $running ? 'disabled' : ''; ?>>
         </form>
 
         <div id="cw-inline-controls" style="display:<?php echo $running ? 'flex' : 'none'; ?>; gap:8px; align-items:center;">

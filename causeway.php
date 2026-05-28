@@ -283,6 +283,78 @@ add_action('admin_post_causeway_manual_import_taxonomies', function () {
     exit;
 });
 
+// Manual listings-only import (no taxonomies)
+add_action('admin_post_causeway_manual_import_listings', function () {
+    if (!current_user_can('manage_options')) {
+        wp_die('Unauthorized');
+    }
+
+    if (!isset($_POST['causeway_import_listings_nonce']) || !wp_verify_nonce($_POST['causeway_import_listings_nonce'], 'causeway_import_listings_action')) {
+        wp_die('Invalid nonce');
+    }
+
+    if (!causeway_is_importer_enabled()) {
+        error_log('[Causeway] Manual listings-only import blocked: importer is disabled in settings');
+        wp_redirect(add_query_arg('import_disabled', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
+        exit;
+    }
+
+    // Atomic lock using transient to prevent race conditions
+    $existing_lock = get_transient('causeway_import_lock');
+    if ($existing_lock !== false) {
+        $is_stale = (time() - $existing_lock) > (25 * MINUTE_IN_SECONDS);
+        if ($is_stale) {
+            delete_transient('causeway_import_lock');
+            set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
+            error_log('[Causeway] Released stale import lock and re-acquired (listings-only)');
+        } else {
+            error_log('[Causeway] Listings-only import blocked: another import is already running');
+            wp_redirect(add_query_arg('import_running', '1', admin_url('edit.php?post_type=listing&page=causeway-importer')));
+            exit;
+        }
+    } else {
+        set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
+    }
+
+    // Mark status as queued
+    $status = [
+        'running' => true,
+        'phase' => 'queued',
+        'processed' => 0,
+        'total' => 0,
+        'percent' => 0,
+        'state' => 'queued',
+        'started_at' => time(),
+        'updated_at' => time(),
+    ];
+    update_option('causeway_import_status', $status, false);
+
+    // Try WP-CLI spawn first
+    $spawned_cli = false;
+    if (apply_filters('causeway_cli_spawn_enabled', true)) {
+        $spawned_cli = causeway_try_spawn_cli_listings_import();
+    }
+
+    if ($spawned_cli) {
+        error_log('🚀 Spawned Causeway listings-only import via WP-CLI in background');
+    } else {
+        // Fallback: schedule a one-off cron event ASAP.
+        $scheduled_for = time();
+        wp_schedule_single_event($scheduled_for, 'causeway_cron_listings_hook');
+        error_log('🕑 Manual listings-only import scheduled for immediate execution via WP-Cron @ '.date('Y-m-d H:i:s',$scheduled_for));
+        if (function_exists('spawn_cron')) {
+            spawn_cron(time());
+        } else {
+            error_log('⚠️ spawn_cron() unavailable; listings-only import will wait for next WP-Cron run/page load.');
+        }
+    }
+
+    $args = [ 'listings_queued' => '1' ];
+    if ($spawned_cli) { $args['cli'] = '1'; }
+    wp_redirect(add_query_arg($args, admin_url('edit.php?post_type=listing&page=causeway-importer')));
+    exit;
+});
+
 // AJAX endpoint to fetch current import status
 add_action('wp_ajax_causeway_import_status', function () {
     if (!current_user_can('manage_options')) {
@@ -493,6 +565,7 @@ register_deactivation_hook(__FILE__, function () {
         wp_clear_scheduled_hook('causeway_cron_export_hook');
         wp_clear_scheduled_hook('causeway_clear_cron_hook');
         wp_clear_scheduled_hook('causeway_cron_taxonomies_hook');
+        wp_clear_scheduled_hook('causeway_cron_listings_hook');
     }
 
     flush_rewrite_rules();
@@ -502,6 +575,7 @@ add_action('causeway_cron_hook', 'run_causeway_import_export');
 add_action('causeway_cron_export_hook', 'run_causeway_export');
 add_action('causeway_clear_cron_hook', 'clear_causeway_status');
 add_action('causeway_cron_taxonomies_hook', 'run_causeway_taxonomy_import');
+add_action('causeway_cron_listings_hook', 'run_causeway_listings_import');
 
 function run_causeway_import_export()
 {
@@ -582,6 +656,45 @@ function run_causeway_taxonomy_import()
             update_option('causeway_import_status', $status, false);
             delete_transient('causeway_import_lock');
             error_log('[Causeway] Released import lock after taxonomy-only error');
+        }
+    }
+}
+
+function run_causeway_listings_import()
+{
+    if (!causeway_is_importer_enabled()) {
+        error_log('Skipping Causeway listings-only import via cron: importer disabled');
+        return;
+    }
+
+    error_log('🕑 Running Causeway listings-only import via cron @ ' . date('Y-m-d H:i:s'));
+
+    $existing_lock = get_transient('causeway_import_lock');
+    $status = get_option('causeway_import_status', []);
+    $state = is_array($status) ? ($status['state'] ?? '') : '';
+
+    if ($existing_lock !== false && $state !== 'queued') {
+        error_log('[Causeway] Cron listings-only import skipped: another import is already running');
+        return;
+    }
+
+    set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
+
+    if (class_exists('Causeway_Importer')) {
+        try {
+            Causeway_Importer::import_listings_only();
+        } catch (Throwable $e) {
+            error_log('[Causeway] Listings-only import failed: ' . $e->getMessage());
+            $status = get_option('causeway_import_status', []);
+            if (!is_array($status)) { $status = []; }
+            $status['running'] = false;
+            $status['phase'] = 'error';
+            $status['state'] = 'error';
+            $status['error_message'] = $e->getMessage();
+            $status['updated_at'] = time();
+            update_option('causeway_import_status', $status, false);
+            delete_transient('causeway_import_lock');
+            error_log('[Causeway] Released import lock after listings-only error');
         }
     }
 }
@@ -786,6 +899,81 @@ function causeway_try_spawn_cli_taxonomy_import(): bool
     return false;
 }
 
+/**
+ * Best-effort background spawn of the listings-only importer via WP-CLI.
+ */
+function causeway_try_spawn_cli_listings_import(): bool
+{
+    if (!causeway_is_importer_enabled()) {
+        error_log('[Causeway] CLI listings-only import spawn blocked: importer is disabled in settings');
+        return false;
+    }
+
+    $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+    $can_exec = function_exists('exec') && !in_array('exec', $disabled, true);
+    $can_proc = function_exists('proc_open') && !in_array('proc_open', $disabled, true);
+    if (!$can_exec && !$can_proc) {
+        return false;
+    }
+
+    $wp_bin = '';
+    if ($can_exec) {
+        $out = [];
+        $rv = 1;
+        @exec('command -v wp 2>/dev/null', $out, $rv);
+        if ($rv === 0 && !empty($out[0])) {
+            $wp_bin = trim($out[0]);
+        }
+    }
+    if ($wp_bin === '') {
+        foreach (['/usr/local/bin/wp','/usr/bin/wp','/bin/wp'] as $candidate) {
+            if (is_executable($candidate)) { $wp_bin = $candidate; break; }
+        }
+    }
+    if ($wp_bin === '') {
+        error_log('[Causeway] WP-CLI binary not found on PATH. Install WP-CLI (wp) and ensure it is executable.');
+        return false;
+    }
+
+    $wp_path = apply_filters('causeway_wp_path', ABSPATH);
+    $allow_root = is_callable('posix_geteuid') ? (posix_geteuid() === 0) : true;
+    $allow_root_flag = $allow_root ? ' --allow-root' : '';
+
+    $log_dir = trailingslashit(WP_CONTENT_DIR);
+    $log_file = $log_dir . 'causeway-import.log';
+
+    $cmd_prefix = (strpos($wp_bin, ' ') !== false) ? $wp_bin : escapeshellcmd($wp_bin);
+    $cmd = $cmd_prefix
+        . ' --path=' . escapeshellarg($wp_path)
+        . $allow_root_flag
+        . ' causeway import_listings';
+
+    $bg = 'nohup ' . $cmd . ' >> ' . escapeshellarg($log_file) . ' 2>&1 & echo $!';
+
+    try {
+        if ($can_exec) {
+            $output = [];
+            $exit = 0;
+            @exec($bg, $output, $exit);
+            if ($exit === 0) {
+                return true;
+            }
+        }
+        if ($can_proc) {
+            $descriptorspec = [0 => ['pipe', 'r'], 1 => ['file', $log_file, 'a'], 2 => ['file', $log_file, 'a']];
+            $process = @proc_open($cmd, $descriptorspec, $pipes, null, null, ['bypass_shell' => true]);
+            if (is_resource($process)) {
+                @proc_close($process);
+                return true;
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('[Causeway] CLI spawn failed: ' . $e->getMessage());
+    }
+
+    return false;
+}
+
 if (defined('WP_CLI') && WP_CLI) {
 
     /**
@@ -844,6 +1032,32 @@ if (defined('WP_CLI') && WP_CLI) {
 
             $secs = number_format(microtime(true) - $start, 2);
             WP_CLI::success("Taxonomy-only import finished in {$secs}s");
+        }
+
+        /**
+         * Run the listings-only import (no taxonomies).
+         *
+         * ## EXAMPLES
+         *
+         *     wp causeway import_listings
+         *
+         * @when after_wp_load
+         */
+        public function import_listings()
+        {
+            if (!causeway_is_importer_enabled()) {
+                WP_CLI::error('Causeway importer is disabled in settings.');
+            }
+
+            $start = microtime(true);
+
+            ini_set('memory_limit', '1G');
+            set_time_limit(0);
+
+            Causeway_Importer::import_listings_only();
+
+            $secs = number_format(microtime(true) - $start, 2);
+            WP_CLI::success("Listings-only import finished in {$secs}s");
         }
     }
 
