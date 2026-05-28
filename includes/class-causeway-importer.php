@@ -1206,7 +1206,43 @@ class Causeway_Importer
             return;
         }
 
-        $listings = json_decode(wp_remote_retrieve_body($response), true);
+        // Log response fingerprint + cache headers to help detect intermediary caching.
+        $http_code = (int) wp_remote_retrieve_response_code($response);
+        $interesting_headers = [
+            'age',
+            'cf-cache-status',
+            'cf-ray',
+            'x-cache',
+            'x-cache-hits',
+            'etag',
+            'last-modified',
+            'cache-control',
+            'expires',
+            'pragma',
+            'vary',
+            'via',
+            'server',
+            'date',
+        ];
+        $header_dump = [];
+        foreach ($interesting_headers as $h) {
+            $v = wp_remote_retrieve_header($response, $h);
+            if (is_array($v)) {
+                $v = implode(', ', array_filter(array_map('strval', $v), 'strlen'));
+            }
+            $v = is_scalar($v) ? trim((string) $v) : '';
+            if ($v !== '') {
+                $header_dump[$h] = $v;
+            }
+        }
+
+        $body = (string) wp_remote_retrieve_body($response);
+        self::log('🌐 Listings response: http=' . $http_code . ' bytes=' . strlen($body) . ' md5=' . md5($body));
+        if (!empty($header_dump)) {
+            self::log('🌐 Listings response headers: ' . wp_json_encode($header_dump));
+        }
+
+        $listings = json_decode($body, true);
         if (!is_array($listings)) {
             self::log('❌ Invalid listings data');
             // self::log($listings);
@@ -1240,6 +1276,7 @@ class Causeway_Importer
 
         // Deduplicate payload by Causeway ID to prevent double-processing in a single run
         $pre_dedupe = is_array($listings) ? count($listings) : 0;
+        self::log('📦 Listings count pre-dedupe: ' . $pre_dedupe . ' @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
         $seen_payload_ids = [];
         $deduped = [];
         foreach ($listings as $it) {
