@@ -1330,6 +1330,12 @@ class Causeway_Importer
                 'meta_value' => $causeway_id,
                 'numberposts' => 1,
                 'fields' => 'ids',
+                // Include trashed posts so we can revive an accidentally-deleted English source
+                // instead of creating a new post (which can lead to duplicate translations).
+                'post_status' => 'any',
+                // get_posts() suppresses filters by default, which prevents WPML's language filtering.
+                // Explicitly allow filters so 'lang' works and we only match English listings.
+                'suppress_filters' => false,
                 'lang' => 'en',
             ]);
 
@@ -1344,6 +1350,8 @@ class Causeway_Importer
                     'name'        => $slug,
                     'numberposts' => 1,
                     'fields'      => 'ids',
+                    'post_status' => 'any',
+                    'suppress_filters' => false,
                     'lang'        => 'en',
                 ]);
                 if (!empty($by_slug)) {
@@ -1595,6 +1603,84 @@ class Causeway_Importer
 
         // Final cleanup: collapse any duplicates that may exist with same causeway_id (keep lowest ID)
         self::collapse_duplicate_listings();
+
+        // WPML edge-case cleanup: delete translated listings (e.g., fr) that have no English source
+        // remaining in their translation group (trid). This prevents orphaned translations from
+        // lingering when the EN post was force-deleted and a new EN post is imported.
+        self::delete_orphan_translated_listings();
+    }
+
+    /**
+     * Delete non-default-language listing posts that have no default-language counterpart
+     * in the same WPML translation group (trid). This prevents orphan translations from
+     * co-existing with a newly imported EN source and later generating a duplicate translation.
+     */
+    private static function delete_orphan_translated_listings(): void
+    {
+        if (!has_filter('wpml_default_language')) {
+            return;
+        }
+
+        global $wpdb;
+        $tr_table = $wpdb->prefix . 'icl_translations';
+        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$tr_table}'");
+        if (!$table_exists) {
+            return;
+        }
+
+        $default_lang = apply_filters('wpml_default_language', null);
+        if (!is_string($default_lang) || $default_lang === '') {
+            $default_lang = 'en';
+        }
+
+        $element_type = 'post_listing';
+
+        // Find non-default listings whose translation group has no default-language post.
+        // We consider the default missing if the translation row is absent OR the default post
+        // is missing/trashed.
+        $sql = "SELECT t.element_id AS post_id, t.language_code AS lang
+                FROM {$tr_table} t
+                INNER JOIN {$wpdb->posts} p ON p.ID = t.element_id
+                LEFT JOIN {$tr_table} d
+                    ON d.trid = t.trid
+                    AND d.language_code = %s
+                    AND d.element_type = t.element_type
+                LEFT JOIN {$wpdb->posts} pd
+                    ON pd.ID = d.element_id
+                    AND pd.post_status != 'trash'
+                WHERE t.element_type = %s
+                  AND t.language_code <> %s
+                  AND p.post_type = %s
+                  AND p.post_status != 'trash'
+                  AND (d.translation_id IS NULL OR pd.ID IS NULL)";
+
+        $rows = $wpdb->get_results($wpdb->prepare($sql, $default_lang, $element_type, $default_lang, 'listing'));
+        if (empty($rows)) {
+            return;
+        }
+
+        $deleted = 0;
+        foreach ($rows as $row) {
+            $post_id = (int) ($row->post_id ?? 0);
+            if ($post_id <= 0) {
+                continue;
+            }
+
+            $lang = isset($row->lang) ? (string) $row->lang : '';
+            $title = get_the_title($post_id);
+            $causeway_id = (int) get_post_meta($post_id, 'causeway_id', true);
+
+            wp_delete_post($post_id, true);
+            $deleted++;
+
+            $title_label = is_string($title) && $title !== '' ? $title : '(no title)';
+            $causeway_label = $causeway_id > 0 ? (string) $causeway_id : 'n/a';
+            self::log("🧹 Deleted orphan {$lang} listing translation ID: {$post_id} (Causeway ID: {$causeway_label}) {$title_label}");
+        }
+
+        if ($deleted > 0) {
+            self::log("🧹 Deleted {$deleted} orphan translated listings (missing {$default_lang} source)");
+        }
     }
 
     private static function assign_locations($locations, $post_id) {
