@@ -2282,7 +2282,7 @@ class Causeway_Importer
 
     /**
      * Find and delete duplicate listings that share the same 'causeway_id'.
-     * Keeps the lowest post ID (oldest) and permanently deletes others.
+        * Keeps the highest post ID (newest) and permanently deletes others.
      */
     private static function collapse_duplicate_listings(): void
     {
@@ -2296,7 +2296,7 @@ class Causeway_Importer
 
         if ($table_exists) {
             // WPML present: restrict to English so translations (e.g., fr) are preserved
-            $sql = "SELECT pm.meta_value AS causeway_id, GROUP_CONCAT(p.ID ORDER BY p.ID ASC) AS ids, COUNT(*) AS cnt
+            $sql = "SELECT pm.meta_value AS causeway_id, GROUP_CONCAT(p.ID ORDER BY p.ID DESC) AS ids, COUNT(*) AS cnt
                 FROM {$wpdb->postmeta} pm
                 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
                 INNER JOIN {$tr_table} t ON t.element_id = p.ID AND t.element_type = CONCAT('post_', p.post_type)
@@ -2306,7 +2306,7 @@ class Causeway_Importer
             $rows = $wpdb->get_results($wpdb->prepare($sql, 'causeway_id', 'listing', $lang));
         } else {
             // No WPML: safe to collapse duplicates globally for listings
-            $sql = "SELECT pm.meta_value AS causeway_id, GROUP_CONCAT(p.ID ORDER BY p.ID ASC) AS ids, COUNT(*) AS cnt
+            $sql = "SELECT pm.meta_value AS causeway_id, GROUP_CONCAT(p.ID ORDER BY p.ID DESC) AS ids, COUNT(*) AS cnt
                 FROM {$wpdb->postmeta} pm
                 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
                 WHERE pm.meta_key = %s AND p.post_type = %s AND p.post_status != 'trash'
@@ -2324,11 +2324,21 @@ class Causeway_Importer
             $ids = array_filter(array_map('intval', explode(',', (string) $row->ids)));
             if (count($ids) <= 1) { continue; }
 
-            // Keep the first (lowest) ID; delete the rest
-            $keep = array_shift($ids);
+            // Keep the newest (highest) ID; delete the rest
+            $keep = max($ids);
+            $keep_title = get_the_title($keep);
+            $keep_title_label = is_string($keep_title) && $keep_title !== '' ? $keep_title : '(no title)';
+
             foreach ($ids as $del_id) {
+                if ($del_id === $keep) {
+                    continue;
+                }
+
+                $del_title = get_the_title($del_id);
+                $del_title_label = is_string($del_title) && $del_title !== '' ? $del_title : '(no title)';
+
                 wp_delete_post($del_id, true);
-                self::log("🗑️ Deleted duplicate listing {$del_id} for Causeway ID {$cid}; kept {$keep}");
+                self::log("🗑️ Deleted duplicate listing {$del_id} ({$del_title_label}) for Causeway ID {$cid}; kept {$keep} ({$keep_title_label})");
             }
         }
     }
