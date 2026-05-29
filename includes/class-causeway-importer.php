@@ -1824,9 +1824,9 @@ class Causeway_Importer
 
         global $wpdb;
 
-        // Query all listings with causeway_id (can be NULL) and their post ID
+        // Query all listings with causeway_id (can be NULL), their post ID, and title
         $results = $wpdb->get_results("
-            SELECT p.ID, pm.meta_value as causeway_id
+            SELECT p.ID, p.post_title, pm.meta_value as causeway_id
             FROM {$wpdb->posts} p
             LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'causeway_id'
             WHERE p.post_type = 'listing'
@@ -1836,6 +1836,7 @@ class Causeway_Importer
         foreach ($results as $row) {
             $post_id = (int) $row->ID;
             $causeway_id = isset($row->causeway_id) ? (int) $row->causeway_id : null;
+            $post_title = isset($row->post_title) ? (string) $row->post_title : '';
 
             // Delete if no causeway_id OR causeway_id not in imported_ids
             if (is_null($causeway_id) || !isset($imported_ids_map[$causeway_id])) {
@@ -1868,7 +1869,9 @@ class Causeway_Importer
 
                 wp_delete_post($post_id, true);
                 $reason = is_null($causeway_id) ? 'no Causeway ID' : "stale Causeway ID: $causeway_id";
-                self::log("🗑️ Deleted listing ID: $post_id ($reason)");
+                $causeway_label = is_null($causeway_id) ? 'n/a' : (string) $causeway_id;
+                $title_label = $post_title !== '' ? $post_title : '(no title)';
+                self::log("🗑️ Deleted listing ID: {$post_id} (Causeway ID: {$causeway_label}) {$title_label} ({$reason})");
                 $deleted_count++;
             }
         }
