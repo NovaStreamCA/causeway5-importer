@@ -13,7 +13,7 @@ Toggle headless behavior in: Listings → Settings → Causeway Import Settings.
 ### Settings
 
 - Causeway API URL (`causeway_api_url`) — required
-  - Example: https://api-causeway5.novastream.dev/
+  - Example: https://v5-api.causewayapp.ca/
 - Public Website URL (`causeway_public_url`) — required when headless is ON
   - The external site to notify after imports. Example: https://cbisland.ca
 - Headless API Secret (`headless_api_secret`) — required when headless is ON

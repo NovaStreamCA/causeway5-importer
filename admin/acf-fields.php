@@ -531,7 +531,7 @@ function causeway_register_acf_fields() {
                     'label' => 'Causeway API URL',
                     'name' => 'causeway_api_url',
                     'type' => 'url',
-                    'instructions' => 'Enter the API URL (e.g. https://api-causeway5.novastream.dev/)',
+                    'instructions' => 'Enter the API URL (e.g. https://v5-api.causewayapp.ca/)',
                     'required' => 1,
                 ],
                 // Filters tab for limiting imports by Area/Community

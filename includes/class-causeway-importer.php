@@ -10,7 +10,7 @@ class Causeway_Importer
     private static $counties = [];
     private static $listing_map = [];
     private static $start;
-    private static $baseURL = 'https://api-causeway5.novastream.dev/';
+    private static $baseURL = 'https://v5-api.causewayapp.ca/';
     private static $term_cache = [];
     private static $total_listings = 0;
     private static $processed_listings = 0;
