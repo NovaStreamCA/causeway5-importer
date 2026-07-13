@@ -1154,7 +1154,9 @@ class Causeway_Importer
         self::log('Importing listings..');
         $imported_ids = [];
 
-        // Build base endpoint with status filter
+        // Build base endpoint with status filter.
+        // The API currently throws when search[]/compare[]/value[] are parsed as arrays,
+        // so area/community import filters are enforced after fetching published listings.
         // $endpoint = self::$baseURL . 'listings?search=listings.id&compare==&value=1647';
         $endpoint = self::$baseURL . 'listings?search=listings.status&compare==&value=Published';
         // $endpoint = self::$baseURL . 'listings?search=listings_types.type_id&compare==&value=3';
@@ -1173,15 +1175,6 @@ class Causeway_Importer
         foreach ((array)$community_ids as $tid) {
             $cid = (int) get_field('causeway_id', 'listing-communities_' . $tid);
             if ($cid) $community_causeway_ids[] = $cid;
-        }
-
-        // If filters selected, append repeated search/compare/value triples as required by API
-        foreach ((array)$community_causeway_ids as $cid) {
-            $endpoint .= '&search=locations.community_id&compare==&value=' . rawurlencode((string)$cid);
-        }
-        foreach ((array)$area_causeway_ids as $aid) {
-            // API expects communities_areas.area_id per spec
-            $endpoint .= '&search=communities_areas.area_id&compare==&value=' . rawurlencode((string)$aid);
         }
 
         // Allow last-minute customization via filter
