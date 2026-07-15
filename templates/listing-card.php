@@ -30,10 +30,12 @@ if (!is_wp_error($categories_terms) && !empty($categories_terms)) {
 }
 $community_terms = get_the_terms($post_id, 'listing-communities');
 $community_classes = '';
+$community_names = [];
 if (!is_wp_error($community_terms) && !empty($community_terms)) {
     $community_parts = [];
     foreach ($community_terms as $community) {
         if (!empty($community->slug)) { $community_parts[] = 'community-' . sanitize_html_class($community->slug); }
+        if (!empty($community->name)) { $community_names[] = $community->name; }
     }
     if (!empty($community_parts)) { $community_classes = ' ' . implode(' ', $community_parts); }
 }
@@ -52,8 +54,6 @@ $nextDate = get_field('next_occurrence', $post_id);
 $price = get_field('price', $post_id);
 $nextMonth = '';
 $nextDay  = '';
-// Determine if this listing is an event (has occurrences/next_occurrence)
-$occurrences = get_field('all_occurrences', $post_id);
 // Event determination: listing-type taxonomy slug exactly 'event' OR contains 'event'
 $is_event = false; $type_slugs = [];
 if (!is_wp_error($types) && !empty($types)) {
@@ -119,24 +119,8 @@ if ($is_event && !empty($nextDate)) {
             <?php endif; ?>
         </h3>
 
-        <!-- First Start/Last End -->
-        <?php
-        // Data is guaranteed sorted at import; use first start and last end directly.
-        if (is_array($occurrences) && !empty($occurrences)) {
-            $first = reset($occurrences);
-            $last  = end($occurrences);
-
-            $first_dt = !empty($first['occurrence_start']) ? causeway_parse_occ_dt((string)$first['occurrence_start']) : null;
-            $last_dt  = !empty($last['occurrence_end'])   ? causeway_parse_occ_dt((string)$last['occurrence_end'])   : null;
-
-            if ($first_dt instanceof DateTime && $last_dt instanceof DateTime) {
-                $tz = wp_timezone();
-                $start_label = wp_date('M j', $first_dt->getTimestamp(), $tz);
-                $end_label   = wp_date('M j', $last_dt->getTimestamp(), $tz);
-                $range_label = ($start_label === $end_label) ? $start_label : ($start_label . ' - ' . $end_label);
-                echo '<p class="dates">' . esc_html($range_label) . '</p>';
-            }
-        }
-        ?>
+        <?php if (!empty($community_names)) : ?>
+            <p class="communities"><?php echo esc_html(implode(', ', $community_names)); ?></p>
+        <?php endif; ?>
     </div>
 </article>
