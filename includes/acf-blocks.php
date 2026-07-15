@@ -80,6 +80,32 @@ class Causeway_ACF_Blocks {
                         'instructions' => 'Select one or more listing categories to filter.',
                     ],
                     [
+                        'key' => 'field_causeway_listings_communities_multi',
+                        'label' => 'Listing Communities',
+                        'name' => 'communities',
+                        'type' => 'taxonomy',
+                        'taxonomy' => 'listing-communities',
+                        'field_type' => 'multi_select',
+                        'add_term' => 0,
+                        'save_terms' => 0,
+                        'load_terms' => 0,
+                        'return_format' => 'id',
+                        'instructions' => 'Only show listings assigned to one or more selected communities.',
+                    ],
+                    [
+                        'key' => 'field_causeway_listings_areas_multi',
+                        'label' => 'Listing Areas',
+                        'name' => 'areas',
+                        'type' => 'taxonomy',
+                        'taxonomy' => 'listing-areas',
+                        'field_type' => 'multi_select',
+                        'add_term' => 0,
+                        'save_terms' => 0,
+                        'load_terms' => 0,
+                        'return_format' => 'id',
+                        'instructions' => 'Only show listings assigned to one or more selected areas.',
+                    ],
+                    [
                         'key' => 'field_causeway_listings_orderby',
                         'label' => 'Order By',
                         'name' => 'orderby',
@@ -213,6 +239,21 @@ class Causeway_ACF_Blocks {
             if (!empty($cat_slugs)) { $categories = $cat_slugs; }
         }
 
+        // Communities and areas are server-side query constraints.
+        $taxonomy_slugs = static function ($field_name, $taxonomy) {
+            $term_ids = get_field($field_name);
+            if (!is_array($term_ids) || empty($term_ids)) { return ''; }
+
+            $slugs = [];
+            foreach ($term_ids as $term_id) {
+                $term = get_term($term_id, $taxonomy);
+                if ($term && !is_wp_error($term)) { $slugs[] = $term->slug; }
+            }
+            return !empty($slugs) ? $slugs : '';
+        };
+        $query_communities = $taxonomy_slugs('communities', 'listing-communities');
+        $query_areas       = $taxonomy_slugs('areas', 'listing-areas');
+
         // Wrap filterbar + grid for scoped controls
         echo '<div class="causeway-listings-section">';
 
@@ -244,6 +285,8 @@ class Causeway_ACF_Blocks {
             // Disable server-side pagination when JS pagination is enabled
             'show_pagination' => false,
             'category' => $categories,
+            'community' => $query_communities,
+            'area' => $query_areas,
             'data' => $pagination ? ['page-limit' => (int)($per_page > 0 ? $per_page : $count)] : [],
         ]);
         echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped

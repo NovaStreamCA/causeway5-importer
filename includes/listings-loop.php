@@ -8,7 +8,7 @@ if (!defined('ABSPATH')) { exit; }
 class Causeway_Listings_Loop {
     /**
      * Build WP_Query args based on attributes.
-     * @param array $args Input args: count, type, order, orderby
+     * @param array $args Input args: count, type, category, community, area, order, orderby
      */
     public static function build_query_args(array $args = []): array {
         $defaults = [
@@ -33,6 +33,22 @@ class Causeway_Listings_Loop {
                 'taxonomy' => 'listings-category',
                 'field'    => 'slug',
                 'terms'    => (array)$category,
+            ];
+        }
+        $community = $args['community'] ?? '';
+        if ($community) {
+            $defaults['tax_query'][] = [
+                'taxonomy' => 'listing-communities',
+                'field'    => 'slug',
+                'terms'    => (array)$community,
+            ];
+        }
+        $area = $args['area'] ?? '';
+        if ($area) {
+            $defaults['tax_query'][] = [
+                'taxonomy' => 'listing-areas',
+                'field'    => 'slug',
+                'terms'    => (array)$area,
             ];
         }
         if (empty($defaults['tax_query'])) {

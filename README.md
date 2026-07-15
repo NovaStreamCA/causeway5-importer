@@ -111,6 +111,8 @@ Attributes (parity with block fields):
 - `type`: Single listing-type slug
 - `types`: Comma-separated listing-type slugs (overrides `type` when present)
 - `categories`: Comma-separated listings-category slugs
+- `communities`: Comma-separated listing-community slugs used to constrain the query
+- `areas`: Comma-separated listing-area slugs used to constrain the query
 - `orderby`: `date`, `title`, or `menu_order` (default `date`)
 - `order`: `ASC` or `DESC` (default `DESC`)
 - `show_pagination`: `true|false` enable client-side pagination (adds `data-page-limit` + page list container)
@@ -123,13 +125,15 @@ Usage examples:
 ```text
 [causeway_listings]
 [causeway_listings count="9" columns="3" orderby="title" order="ASC"]
-[causeway_listings types="event,festival" categories="music,food"]
+[causeway_listings types="event,festival" categories="music,food" communities="charlottetown"]
+[causeway_listings communities="charlottetown,summerside" areas="central-coastal"]
 [causeway_listings show_filterbar="true" filters="search,community,area" types="event"]
 [causeway_listings show_pagination="true" per_page="6" count="12"]
 ```
 
 Notes:
 - Prefer `types` for multiple listing-type filters; `type` remains for single.
+- Multiple terms within one taxonomy match any selected term; constraints across taxonomies are combined with AND.
 - Client-side pagination only; server-side pagination has been removed.
 - `pagination` is maintained solely for backward compatibility and maps to client-side mode.
 - The filter bar template lookup mirrors the block (theme override paths: `causeway/listings-filterbar.php`, `listings-filterbar.php`, `template-parts/causeway/listings-filterbar.php`).

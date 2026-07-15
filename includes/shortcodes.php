@@ -7,6 +7,8 @@
  * - type: single listing-type slug (string)
  * - types: comma-separated listing-type slugs (overrides `type` when present)
  * - categories: comma-separated listings-category slugs
+ * - communities: comma-separated listing-communities slugs
+ * - areas: comma-separated listing-areas slugs
  * - orderby: date|title|menu_order (default date)
  * - order: ASC|DESC (default DESC)
  * - show_pagination: true|false (client-side JS pagination, uses per_page/page-limit data attribute)
@@ -20,7 +22,7 @@
  * Usage examples:
  * [causeway_listings]
  * [causeway_listings count="9" columns="3" orderby="title" order="ASC"]
- * [causeway_listings types="event,festival" categories="music,food"]
+ * [causeway_listings types="event,festival" categories="music,food" communities="charlottetown"]
  * [causeway_listings show_filterbar="true" filters="search,community,area" types="event"]
  * [causeway_listings show_pagination="true" per_page="6" count="12"]
  */
@@ -39,6 +41,8 @@ class Causeway_Listings_Shortcodes {
             'type' => '',
             'types' => '',
             'categories' => '',
+            'communities' => '',
+            'areas' => '',
             'orderby' => 'date',
             'order' => 'DESC',
             'show_pagination' => 'false',
@@ -91,6 +95,18 @@ class Causeway_Listings_Shortcodes {
         }
         $categories = !empty($categories_multi) ? $categories_multi : '';
 
+        // Communities and areas multi.
+        $parse_taxonomy_slugs = static function ($value) {
+            $slugs = [];
+            foreach (explode(',', (string)$value) as $slug) {
+                $slug = sanitize_title(trim($slug));
+                if ($slug !== '') { $slugs[] = $slug; }
+            }
+            return !empty($slugs) ? array_values(array_unique($slugs)) : '';
+        };
+        $communities = $parse_taxonomy_slugs($atts['communities']);
+        $areas       = $parse_taxonomy_slugs($atts['areas']);
+
         // Client-side pagination page size
         $per_page = (int)($atts['per_page'] !== '' ? $atts['per_page'] : 0);
         if ($per_page < 1) { $per_page = (int)$atts['count']; }
@@ -103,6 +119,8 @@ class Causeway_Listings_Shortcodes {
             'orderby' => in_array($atts['orderby'], ['date','title','menu_order'], true) ? $atts['orderby'] : 'date',
             'order' => strtoupper($atts['order']) === 'ASC' ? 'ASC' : 'DESC',
             'category' => $categories,
+            'community' => $communities,
+            'area' => $areas,
         ];
 
         if ($client_pagination) {
