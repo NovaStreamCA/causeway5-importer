@@ -136,7 +136,34 @@ class Causeway_ACF_Blocks {
                         'type' => 'true_false',
                         'ui' => 1,
                         'default_value' => 0,
-                        'instructions' => 'Displays a filter bar above the listings.'
+                        'instructions' => 'Displays a filter bar above the listings.',
+                    ],
+                    [
+                        'key' => 'field_causeway_listings_enabled_filters',
+                        'label' => 'Enabled Filters',
+                        'name' => 'enabled_filters',
+                        'type' => 'checkbox',
+                        'choices' => [
+                            'search' => 'Search',
+                            'type' => 'Type',
+                            'category' => 'Category',
+                            'community' => 'Community',
+                            'area' => 'Area',
+                        ],
+                        'default_value' => ['search', 'type', 'category', 'community', 'area'],
+                        'layout' => 'vertical',
+                        'toggle' => 1,
+                        'return_format' => 'value',
+                        'instructions' => 'Choose which controls appear in the filter bar.',
+                        'conditional_logic' => [
+                            [
+                                [
+                                    'field' => 'field_causeway_listings_show_filterbar',
+                                    'operator' => '==',
+                                    'value' => 1,
+                                ],
+                            ],
+                        ],
                     ],
                 ],
                 'location' => [
@@ -167,9 +194,13 @@ class Causeway_ACF_Blocks {
         }
         $orderby     = get_field('orderby') ?: 'date';
         $order       = get_field('order') ?: 'DESC';
-    $pagination  = (bool) get_field('show_pagination');
-    $per_page    = (int) (get_field('per_page') ?: 0);
+        $pagination  = (bool) get_field('show_pagination');
+        $per_page    = (int) (get_field('per_page') ?: 0);
         $show_filter = (bool) get_field('show_filterbar');
+        $enabled_filters = get_field('enabled_filters');
+        if (!is_array($enabled_filters) || empty($enabled_filters)) {
+            $enabled_filters = ['search', 'type', 'category', 'community', 'area'];
+        }
         // Categories (listings-category) multi-select support
         $categories   = '';
         $cats_multi   = get_field('categories');

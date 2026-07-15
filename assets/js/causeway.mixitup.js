@@ -41,8 +41,10 @@
         var searchInput = root.querySelector('[data-role="search"]');
         var typeSelect = root.querySelector('[data-role="select-type"]');
         var catSelect = root.querySelector('[data-role="select-cat"]');
+        var communitySelect = root.querySelector('[data-role="select-community"]');
+        var areaSelect = root.querySelector('[data-role="select-area"]');
 
-        var state = { query: '', type: '', cat: '' };
+        var state = { query: '', type: '', cat: '', community: '', area: '' };
 
         function normalize(s) { return (s || '').toString().toLowerCase().trim(); }
 
@@ -64,9 +66,13 @@
             var q = state.query;
             var t = sanitizeClass(state.type);
             var c = sanitizeClass(state.cat);
+            var community = sanitizeClass(state.community);
+            var area = sanitizeClass(state.area);
             var parts = [];
             if (t) parts.push('.type-' + t);
             if (c) parts.push('.cat-' + c);
+            if (community) parts.push('.community-' + community);
+            if (area) parts.push('.area-' + area);
             if (q) parts.push('[data-title*="' + cssEscapeAttr(q) + '"]');
             var selector = parts.length ? parts.join('') : 'all';
             try {
@@ -80,10 +86,14 @@
         function onSearch() { state.query = normalize(searchInput ? searchInput.value : ''); clearTimeout(tId); tId = setTimeout(applyFilter, 160); }
         function onType() { state.type = normalize(typeSelect ? typeSelect.value : ''); applyFilter(); }
         function onCat() { state.cat = normalize(catSelect ? catSelect.value : ''); applyFilter(); }
+        function onCommunity() { state.community = normalize(communitySelect ? communitySelect.value : ''); applyFilter(); }
+        function onArea() { state.area = normalize(areaSelect ? areaSelect.value : ''); applyFilter(); }
 
         if (searchInput) searchInput.addEventListener('input', onSearch);
         if (typeSelect) typeSelect.addEventListener('change', onType);
         if (catSelect) catSelect.addEventListener('change', onCat);
+        if (communitySelect) communitySelect.addEventListener('change', onCommunity);
+        if (areaSelect) areaSelect.addEventListener('change', onArea);
 
         // Expose for debugging
         root.__mixer = mixer;

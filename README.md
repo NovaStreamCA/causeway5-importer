@@ -116,6 +116,7 @@ Attributes (parity with block fields):
 - `show_pagination`: `true|false` enable client-side pagination (adds `data-page-limit` + page list container)
 - `per_page`: Page size for client-side pagination (defaults to `count` when omitted)
 - `show_filterbar`: `true|false` include the filter bar template above the grid
+- `filters`: Comma-separated filter controls to display. Options: `search`, `type`, `category`, `community`, `area` (all enabled by default)
 
 Usage examples:
 
@@ -123,7 +124,7 @@ Usage examples:
 [causeway_listings]
 [causeway_listings count="9" columns="3" orderby="title" order="ASC"]
 [causeway_listings types="event,festival" categories="music,food"]
-[causeway_listings show_filterbar="true" types="event"]
+[causeway_listings show_filterbar="true" filters="search,community,area" types="event"]
 [causeway_listings show_pagination="true" per_page="6" count="12"]
 ```
 

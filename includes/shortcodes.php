@@ -12,6 +12,7 @@
  * - show_pagination: true|false (client-side JS pagination, uses per_page/page-limit data attribute)
  * - per_page: int page size for client pagination (defaults to `count` if omitted)
  * - show_filterbar: true|false (include filterbar template like block)
+ * - filters: comma-separated controls: search,type,category,community,area
  *
  * Deprecated:
  * - pagination: legacy server-side flag (alias to show_pagination when true). Server-side pagination removed.
@@ -20,7 +21,7 @@
  * [causeway_listings]
  * [causeway_listings count="9" columns="3" orderby="title" order="ASC"]
  * [causeway_listings types="event,festival" categories="music,food"]
- * [causeway_listings show_filterbar="true" types="event"]
+ * [causeway_listings show_filterbar="true" filters="search,community,area" types="event"]
  * [causeway_listings show_pagination="true" per_page="6" count="12"]
  */
 
@@ -43,6 +44,7 @@ class Causeway_Listings_Shortcodes {
             'show_pagination' => 'false',
             'per_page' => '',
             'show_filterbar' => 'false',
+            'filters' => 'search,type,category,community,area',
             // Deprecated legacy attribute retained for compatibility:
             'pagination' => 'false',
         ], $atts, 'causeway_listings');
@@ -50,6 +52,17 @@ class Causeway_Listings_Shortcodes {
         // Interpret booleans (treat deprecated pagination as alias)
         $client_pagination = filter_var($atts['show_pagination'], FILTER_VALIDATE_BOOLEAN) || filter_var($atts['pagination'], FILTER_VALIDATE_BOOLEAN);
         $show_filterbar    = filter_var($atts['show_filterbar'], FILTER_VALIDATE_BOOLEAN);
+
+        // Filterbar controls.
+        $allowed_filters = ['search', 'type', 'category', 'community', 'area'];
+        $enabled_filters = [];
+        foreach (explode(',', (string)$atts['filters']) as $filter) {
+            $filter = sanitize_key(trim($filter));
+            if (in_array($filter, $allowed_filters, true)) {
+                $enabled_filters[] = $filter;
+            }
+        }
+        $enabled_filters = array_values(array_unique($enabled_filters));
 
         // Types (multi overrides single)
         $types_multi = [];
@@ -98,6 +111,9 @@ class Causeway_Listings_Shortcodes {
         }
 
         ob_start();
+        if ($show_filterbar || $client_pagination) {
+            causeway_enqueue_mixitup_scripts();
+        }
         echo '<div class="causeway-listings-section">';
 
         // Optional filterbar include (same logic as block)

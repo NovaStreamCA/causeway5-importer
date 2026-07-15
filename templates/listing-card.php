@@ -28,6 +28,24 @@ if (!is_wp_error($categories_terms) && !empty($categories_terms)) {
     }
     if (!empty($cparts)) { $cat_classes = ' ' . implode(' ', $cparts); }
 }
+$community_terms = get_the_terms($post_id, 'listing-communities');
+$community_classes = '';
+if (!is_wp_error($community_terms) && !empty($community_terms)) {
+    $community_parts = [];
+    foreach ($community_terms as $community) {
+        if (!empty($community->slug)) { $community_parts[] = 'community-' . sanitize_html_class($community->slug); }
+    }
+    if (!empty($community_parts)) { $community_classes = ' ' . implode(' ', $community_parts); }
+}
+$area_terms = get_the_terms($post_id, 'listing-areas');
+$area_classes = '';
+if (!is_wp_error($area_terms) && !empty($area_terms)) {
+    $area_parts = [];
+    foreach ($area_terms as $area) {
+        if (!empty($area->slug)) { $area_parts[] = 'area-' . sanitize_html_class($area->slug); }
+    }
+    if (!empty($area_parts)) { $area_classes = ' ' . implode(' ', $area_parts); }
+}
 $title_attr = strtolower(wp_strip_all_tags(get_the_title($post_id)));
 $rating = get_field('tripadvisor_rating', $post_id);
 $nextDate = get_field('next_occurrence', $post_id);
@@ -61,7 +79,7 @@ if ($is_event && !empty($nextDate)) {
     }
 }
 ?>
-<article <?php post_class('listing-card' . $filter_classes . $cat_classes); ?> data-title="<?php echo esc_attr($title_attr); ?>" data-event="<?php echo $is_event ? '1' : '0'; ?>" data-next="<?php echo (string)(int)$sortNextTs; ?>" data-types="<?php echo esc_attr(implode(',', $type_slugs)); ?>">
+<article <?php post_class('listing-card' . $filter_classes . $cat_classes . $community_classes . $area_classes); ?> data-title="<?php echo esc_attr($title_attr); ?>" data-event="<?php echo $is_event ? '1' : '0'; ?>" data-next="<?php echo (string)(int)$sortNextTs; ?>" data-types="<?php echo esc_attr(implode(',', $type_slugs)); ?>">
     <a href="<?php echo esc_url(get_permalink()); ?>" class="thumb">
         <?php if (has_post_thumbnail()) {
             the_post_thumbnail('medium_large');
