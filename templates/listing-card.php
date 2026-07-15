@@ -24,7 +24,19 @@ $cat_classes = '';
 if (!is_wp_error($categories_terms) && !empty($categories_terms)) {
     $cparts = [];
     foreach ($categories_terms as $c) {
-        if (!empty($c->slug)) { $cparts[] = 'cat-' . sanitize_html_class($c->slug); }
+        $category_ids = array_merge(
+            [(int) $c->term_id],
+            get_ancestors($c->term_id, 'listings-category', 'taxonomy')
+        );
+        foreach ($category_ids as $category_id) {
+            $category = ((int) $c->term_id === (int) $category_id)
+                ? $c
+                : get_term($category_id, 'listings-category');
+            if ($category && !is_wp_error($category) && !empty($category->slug)) {
+                $class = 'cat-' . sanitize_html_class($category->slug);
+                $cparts[$class] = $class;
+            }
+        }
     }
     if (!empty($cparts)) { $cat_classes = ' ' . implode(' ', $cparts); }
 }

@@ -25,6 +25,7 @@ $types = in_array('type', $enabled_filters, true) ? get_terms([
 $cats = in_array('category', $enabled_filters, true) ? get_terms([
     'taxonomy' => 'listings-category',
     'hide_empty' => true,
+    'pad_counts' => true,
 ]) : [];
 $communities = in_array('community', $enabled_filters, true) ? get_terms([
     'taxonomy' => 'listing-communities',
@@ -34,6 +35,28 @@ $areas = in_array('area', $enabled_filters, true) ? get_terms([
     'taxonomy' => 'listing-areas',
     'hide_empty' => true,
 ]) : [];
+
+// Group categories by parent so the dropdown reflects the taxonomy hierarchy.
+$categories_by_parent = [];
+if (!is_wp_error($cats) && !empty($cats)) {
+    foreach ($cats as $category) {
+        $categories_by_parent[(int) $category->parent][] = $category;
+    }
+}
+$render_category_options = static function ($parent_id = 0, $depth = 0) use (&$render_category_options, $categories_by_parent) {
+    if (empty($categories_by_parent[$parent_id])) { return; }
+
+    foreach ($categories_by_parent[$parent_id] as $category) {
+        $prefix = str_repeat('— ', $depth);
+        printf(
+            '<option value="%1$s" data-depth="%2$d">%3$s</option>',
+            esc_attr($category->slug),
+            (int) $depth,
+            esc_html($prefix . $category->name)
+        );
+        $render_category_options((int) $category->term_id, $depth + 1);
+    }
+};
 ?>
 
 <div class="causeway-filterbar" role="region" aria-label="Listings filters">
@@ -66,11 +89,7 @@ $areas = in_array('area', $enabled_filters, true) ? get_terms([
             <label for="causeway-filter-cat" class="screen-reader-text"><?php esc_html_e('Filter by category', 'causeway'); ?></label>
             <select id="causeway-filter-cat" data-role="select-cat">
                 <option value=""><?php esc_html_e('All Categories', 'causeway'); ?></option>
-                <?php if (!is_wp_error($cats) && !empty($cats)) : ?>
-                    <?php foreach ($cats as $c) : ?>
-                        <option value="<?php echo esc_attr($c->slug); ?>"><?php echo esc_html($c->name); ?></option>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+                <?php $render_category_options(); ?>
             </select>
         <?php endif; ?>
 
