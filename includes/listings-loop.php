@@ -86,6 +86,10 @@ class Causeway_Listings_Loop {
                 self::include_template_part('listing-card.php');
             }
             echo '</div>';
+            echo '<div class="causeway-listings-no-results" role="status" aria-live="polite" hidden>';
+            echo '<h3 class="text-primary fw-bold">' . esc_html__('No listings found', 'causeway') . '</h3>';
+            echo '<p>' . esc_html__('Try adjusting your search or filters.', 'causeway') . '</p>';
+            echo '</div>';
             if (!empty($args['show_pagination'])) {
                 echo '<div class="causeway-pagination">';
                 // Basic pagination (doesn't persist block attrs). For block context consider JS later.
@@ -97,7 +101,10 @@ class Causeway_Listings_Loop {
             }
             wp_reset_postdata();
         } else {
-            echo '<p class="no-listings">' . esc_html__('No listings found.', 'causeway') . '</p>';
+            echo '<div class="causeway-listings-no-results" role="status">';
+            echo '<h3>' . esc_html__('No listings found', 'causeway') . '</h3>';
+            echo '<p>' . esc_html__('Try adjusting your search or filters.', 'causeway') . '</p>';
+            echo '</div>';
         }
         return trim(ob_get_clean());
     }

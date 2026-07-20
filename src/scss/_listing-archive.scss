@@ -129,6 +129,27 @@
     }
 }
 
+.causeway-listings-no-results {
+    padding: 2rem;
+    border: 1px solid $color-border;
+    border-radius: $radius;
+    background: #fff;
+    text-align: center;
+
+    &[hidden] {
+        display: none;
+    }
+
+    h3 {
+        margin: 0 0 .5rem;
+    }
+
+    p {
+        margin: 0;
+        color: rgba(0, 0, 0, .65);
+    }
+}
+
 @for $i from 1 through 6 {
     .causeway-listings-grid.cols-#{$i} {
         grid-template-columns: repeat(#{$i}, 1fr);

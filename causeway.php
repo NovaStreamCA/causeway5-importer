@@ -1100,7 +1100,7 @@ function causeway_enqueue_mixitup_scripts(): void {
     wp_register_script('mixitup', $base . 'mixitup.min.js', [], '3.3.1', true);
     wp_register_script('mixitup-multifilter', $base . 'mixitup-multifilter.min.js', ['mixitup'], '3.3.1', true);
     wp_register_script('mixitup-pagination', $base . 'mixitup-pagination.min.js', ['mixitup'], '3.3.1', true);
-    wp_register_script('causeway-mixitup-init', $base . 'causeway.mixitup.js', ['mixitup','mixitup-multifilter','mixitup-pagination'], '1.0.2', true);
+    wp_register_script('causeway-mixitup-init', $base . 'causeway.mixitup.js', ['mixitup','mixitup-multifilter','mixitup-pagination'], '1.0.3', true);
     wp_enqueue_script('causeway-mixitup-init');
 }
 
@@ -1109,7 +1109,7 @@ add_action('wp_enqueue_scripts', function () {
     $is_listing_screen = is_singular('listing') || is_post_type_archive('listing');
     // Heuristic: listing grid usage via block/shortcode – always enqueue on singular pages to avoid FOUC
     if ($is_listing_screen || has_block('acf/causeway-listings-grid') || is_page()) {
-        wp_enqueue_style('causeway-listings', plugin_dir_url(__FILE__) . 'assets/css/causeway.css', [], '1.0.0');
+        wp_enqueue_style('causeway-listings', plugin_dir_url(__FILE__) . 'assets/css/causeway.css', [], '1.0.1');
     }
     // Spotlight lightbox (only needed on single listing where hero/gallery images exist)
     if (is_singular('listing')) {
@@ -1131,5 +1131,5 @@ add_action('wp_enqueue_scripts', function () {
 
 // Editor styles (block editor) for listing block previews
 add_action('enqueue_block_editor_assets', function () {
-    wp_enqueue_style('causeway-listings-editor', plugin_dir_url(__FILE__) . 'assets/css/causeway.css', [], '1.0.0');
+    wp_enqueue_style('causeway-listings-editor', plugin_dir_url(__FILE__) . 'assets/css/causeway.css', [], '1.0.1');
 });

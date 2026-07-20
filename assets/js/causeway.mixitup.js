@@ -11,6 +11,12 @@
             console.warn('[MixItUp] init aborted for section #' + sectionId + ' (missing grid or mixitup)', { hasGrid: !!grid, hasMixitup: (typeof mixitup !== 'undefined') });
             return;
         }
+        var noResults = root.querySelector('.causeway-listings-no-results');
+
+        function updateNoResults(mixState) {
+            if (!noResults) return;
+            noResults.hidden = !mixState || mixState.totalShow > 0;
+        }
 
         // Initialize MixItUp
         var limitAttr = parseInt(grid.getAttribute('data-page-limit') || '0', 10);
@@ -23,7 +29,8 @@
             load: { sort: 'event:desc next:asc title:asc' },
             callbacks: {
                 onMixStart: function () { },
-                onMixEnd: function () { }
+                onMixEnd: updateNoResults,
+                onMixFail: updateNoResults
             }
         };
         if (hasPagination) {
@@ -160,6 +167,7 @@
 
         // Remove options which cannot match anything in this particular grid.
         updateAvailableOptions();
+        updateNoResults(mixer.getState());
 
         // Expose for debugging
         root.__mixer = mixer;

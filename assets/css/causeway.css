@@ -128,6 +128,24 @@
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
+.causeway-listings-no-results {
+  padding: 2rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  text-align: center;
+}
+.causeway-listings-no-results[hidden] {
+  display: none;
+}
+.causeway-listings-no-results h3 {
+  margin: 0 0 0.5rem;
+}
+.causeway-listings-no-results p {
+  margin: 0;
+  color: rgba(0, 0, 0, 0.65);
+}
+
 .causeway-listings-grid.cols-1 {
   grid-template-columns: repeat(1, 1fr);
 }
