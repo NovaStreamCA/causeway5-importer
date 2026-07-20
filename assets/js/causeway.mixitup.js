@@ -44,9 +44,22 @@
         var communitySelect = root.querySelector('[data-role="select-community"]');
         var areaSelect = root.querySelector('[data-role="select-area"]');
 
-        var state = { query: '', type: '', cat: '', community: '', area: '' };
-
         function normalize(s) { return (s || '').toString().toLowerCase().trim(); }
+
+        var state = {
+            query: normalize(searchInput ? searchInput.value : ''),
+            type: normalize(typeSelect ? typeSelect.value : ''),
+            cat: normalize(catSelect ? catSelect.value : ''),
+            community: normalize(communitySelect ? communitySelect.value : ''),
+            area: normalize(areaSelect ? areaSelect.value : '')
+        };
+        var targets = Array.prototype.slice.call(grid.querySelectorAll('.listing-card'));
+        var facets = [
+            { key: 'type', prefix: 'type-', select: typeSelect },
+            { key: 'cat', prefix: 'cat-', select: catSelect },
+            { key: 'community', prefix: 'community-', select: communitySelect },
+            { key: 'area', prefix: 'area-', select: areaSelect }
+        ];
 
         function readTitle(el) {
             var t = el.getAttribute('data-title');
@@ -62,6 +75,55 @@
         function sanitizeClass(val) {
             return (val || '').replace(/[^a-z0-9_-]/gi, '');
         }
+
+        /**
+         * Tests a card against the current search and facet state. For the facet
+         * currently being populated, use the candidate option instead of its
+         * selected value so each dropdown reflects the other active filters.
+         */
+        function cardMatches(card, candidateFacet, candidateValue) {
+            if (state.query && readTitle(card).indexOf(state.query) === -1) {
+                return false;
+            }
+
+            for (var i = 0; i < facets.length; i++) {
+                var facet = facets[i];
+                var value = facet.key === candidateFacet ? candidateValue : state[facet.key];
+                value = sanitizeClass(value);
+
+                if (value && !card.classList.contains(facet.prefix + value)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        function updateAvailableOptions() {
+            facets.forEach(function (facet) {
+                if (!facet.select) return;
+
+                Array.prototype.forEach.call(facet.select.options, function (option) {
+                    var value = normalize(option.value);
+
+                    // The "All" option and the active option must remain usable so
+                    // the user can always see and clear their current selection.
+                    if (!value || value === state[facet.key]) {
+                        option.hidden = false;
+                        option.disabled = false;
+                        return;
+                    }
+
+                    var isAvailable = targets.some(function (card) {
+                        return cardMatches(card, facet.key, value);
+                    });
+
+                    option.hidden = !isAvailable;
+                    option.disabled = !isAvailable;
+                });
+            });
+        }
+
         function applyFilter() {
             var q = state.query;
             var t = sanitizeClass(state.type);
@@ -75,6 +137,7 @@
             if (area) parts.push('.area-' + area);
             if (q) parts.push('[data-title*="' + cssEscapeAttr(q) + '"]');
             var selector = parts.length ? parts.join('') : 'all';
+            updateAvailableOptions();
             try {
                 mixer.filter(selector);
             } catch (err) {
@@ -95,9 +158,10 @@
         if (communitySelect) communitySelect.addEventListener('change', onCommunity);
         if (areaSelect) areaSelect.addEventListener('change', onArea);
 
+        // Remove options which cannot match anything in this particular grid.
+        updateAvailableOptions();
+
         // Expose for debugging
-        root.__mixer = mixer;
-        // Minimal exposure for potential manual debugging (no console spam)
         root.__mixer = mixer;
     }
 
