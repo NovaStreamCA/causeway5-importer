@@ -48,13 +48,13 @@
         .cs-input-group {
             border-radius: .75rem;
             overflow: hidden;
-            width: auto;
+            width: 100%;
+            min-height: 46px;
             position: relative;
             display: flex;
-            flex-wrap: wrap;
             align-items: stretch;
             border: 1px solid #cfd2d3;
-            flex-basis: 32%;
+            background: #fff;
 
             .input-group-text {
                 display: flex;
@@ -67,11 +67,9 @@
                 text-align: center;
                 white-space: nowrap;
                 background-color: var(--bs-tertiary-bg);
-                border: var(--bs-border-width) solid #cfd2d3;
-                border-radius: .75rem;
-                border-top-right-radius: 0;
-                border-bottom-right-radius: 0;
-                padding: 0 .5rem;
+                border: 0;
+                border-right: 1px solid #cfd2d3;
+                padding: 0 .65rem;
             }
 
             input {
@@ -83,10 +81,13 @@
                 font-size: 1rem;
                 padding: .5rem .75rem;
                 outline: none !important;
+                background: #fff;
             }
         }
 
         select {
+            width: 100%;
+            min-height: 46px;
             font-size: 1rem;
             padding: .6rem 2.25rem .6rem .75rem;
             border: 1px solid #cfd2d3;
@@ -119,6 +120,7 @@
 
         .causeway-clear-filters {
             align-self: stretch;
+            width: 100%;
         }
     }
 }
@@ -371,27 +373,33 @@
 
 /* Filterbar for Listings Grid block */
 .causeway-filterbar {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 0;
-    margin-bottom: 0.75rem;
+    display: block;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid #e2e5e7;
+    border-radius: 1rem;
+    background: #f7f8f8;
 
     .filter-row {
         width: 100%;
-        display: flex;
-        align-items: center;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(160px, 1fr));
         gap: 0.75rem;
-        flex-wrap: wrap;
+        align-items: stretch;
 
-        @media (max-width: 768px) {
-            flex-direction: row;
+        @media (max-width: 900px) {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
 
-            .cs-input-group,
-            select {
-                flex: 1 1 auto;
-                flex-shrink: 1 !important;
-                max-width: 100%;
+            .cs-input-group {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            grid-template-columns: minmax(0, 1fr);
+
+            .cs-input-group {
+                grid-column: auto;
             }
         }
     }

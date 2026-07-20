@@ -59,13 +59,13 @@
 .causeway-listings-section .causeway-filterbar .cs-input-group {
   border-radius: 0.75rem;
   overflow: hidden;
-  width: auto;
+  width: 100%;
+  min-height: 46px;
   position: relative;
   display: flex;
-  flex-wrap: wrap;
   align-items: stretch;
   border: 1px solid #cfd2d3;
-  flex-basis: 32%;
+  background: #fff;
 }
 .causeway-listings-section .causeway-filterbar .cs-input-group .input-group-text {
   display: flex;
@@ -78,11 +78,9 @@
   text-align: center;
   white-space: nowrap;
   background-color: var(--bs-tertiary-bg);
-  border: var(--bs-border-width) solid #cfd2d3;
-  border-radius: 0.75rem;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  padding: 0 0.5rem;
+  border: 0;
+  border-right: 1px solid #cfd2d3;
+  padding: 0 0.65rem;
 }
 .causeway-listings-section .causeway-filterbar .cs-input-group input {
   border: 0;
@@ -93,8 +91,11 @@
   font-size: 1rem;
   padding: 0.5rem 0.75rem;
   outline: none !important;
+  background: #fff;
 }
 .causeway-listings-section .causeway-filterbar select {
+  width: 100%;
+  min-height: 46px;
   font-size: 1rem;
   padding: 0.6rem 2.25rem 0.6rem 0.75rem;
   border: 1px solid #cfd2d3;
@@ -120,6 +121,7 @@
 }
 .causeway-listings-section .causeway-filterbar .causeway-clear-filters {
   align-self: stretch;
+  width: 100%;
 }
 
 /* Listing archive / loop styles */
@@ -351,28 +353,34 @@
 
 /* Filterbar for Listings Grid block */
 .causeway-filterbar {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 0;
-  margin-bottom: 0.75rem;
+  display: block;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e2e5e7;
+  border-radius: 1rem;
+  background: #f7f8f8;
 }
 .causeway-filterbar .filter-row {
   width: 100%;
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
   gap: 0.75rem;
-  flex-wrap: wrap;
+  align-items: stretch;
 }
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .causeway-filterbar .filter-row {
-    flex-direction: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .causeway-filterbar .filter-row .cs-input-group,
-  .causeway-filterbar .filter-row select {
-    flex: 1 1 auto;
-    flex-shrink: 1 !important;
-    max-width: 100%;
+  .causeway-filterbar .filter-row .cs-input-group {
+    grid-column: 1/-1;
+  }
+}
+@media (max-width: 575.98px) {
+  .causeway-filterbar .filter-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .causeway-filterbar .filter-row .cs-input-group {
+    grid-column: auto;
   }
 }
 .causeway-filterbar .filter-title {

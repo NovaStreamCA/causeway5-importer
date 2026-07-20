@@ -1109,7 +1109,7 @@ add_action('wp_enqueue_scripts', function () {
     $is_listing_screen = is_singular('listing') || is_post_type_archive('listing');
     // Heuristic: listing grid usage via block/shortcode – always enqueue on singular pages to avoid FOUC
     if ($is_listing_screen || has_block('acf/causeway-listings-grid') || is_page()) {
-        wp_enqueue_style('causeway-listings', plugin_dir_url(__FILE__) . 'assets/css/causeway.css', [], '1.0.2');
+        wp_enqueue_style('causeway-listings', plugin_dir_url(__FILE__) . 'assets/css/causeway.css', [], '1.0.5');
     }
     // Spotlight lightbox (only needed on single listing where hero/gallery images exist)
     if (is_singular('listing')) {
@@ -1131,5 +1131,5 @@ add_action('wp_enqueue_scripts', function () {
 
 // Editor styles (block editor) for listing block previews
 add_action('enqueue_block_editor_assets', function () {
-    wp_enqueue_style('causeway-listings-editor', plugin_dir_url(__FILE__) . 'assets/css/causeway.css', [], '1.0.2');
+    wp_enqueue_style('causeway-listings-editor', plugin_dir_url(__FILE__) . 'assets/css/causeway.css', [], '1.0.5');
 });
