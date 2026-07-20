@@ -114,6 +114,7 @@ class Causeway_ACF_Blocks {
                             'date' => 'Date',
                             'title' => 'Title',
                             'menu_order' => 'Menu Order',
+                            'rand' => 'Random',
                         ],
                         'default_value' => 'date',
                     ],
@@ -127,6 +128,15 @@ class Causeway_ACF_Blocks {
                             'ASC' => 'Ascending',
                         ],
                         'default_value' => 'DESC',
+                        'conditional_logic' => [
+                            [
+                                [
+                                    'field' => 'field_causeway_listings_orderby',
+                                    'operator' => '!=',
+                                    'value' => 'rand',
+                                ],
+                            ],
+                        ],
                     ],
                     [
                         'key' => 'field_causeway_listings_pagination',
@@ -219,6 +229,7 @@ class Causeway_ACF_Blocks {
             if (!empty($slugs)) { $type = $slugs; }
         }
         $orderby     = get_field('orderby') ?: 'date';
+        $orderby     = in_array($orderby, ['date', 'title', 'menu_order', 'rand'], true) ? $orderby : 'date';
         $order       = get_field('order') ?: 'DESC';
         $pagination  = (bool) get_field('show_pagination');
         $per_page    = (int) (get_field('per_page') ?: 0);
@@ -276,6 +287,14 @@ class Causeway_ACF_Blocks {
 
         // Page list is rendered inside the grid container when pagination is enabled
 
+        $grid_data = [];
+        if ($pagination) {
+            $grid_data['page-limit'] = (int)($per_page > 0 ? $per_page : $count);
+        }
+        if ($orderby === 'rand') {
+            $grid_data['initial-sort'] = 'default:asc';
+        }
+
         $html = Causeway_Listings_Loop::render([
             'count' => $count,
             'columns' => $columns,
@@ -287,7 +306,7 @@ class Causeway_ACF_Blocks {
             'category' => $categories,
             'community' => $query_communities,
             'area' => $query_areas,
-            'data' => $pagination ? ['page-limit' => (int)($per_page > 0 ? $per_page : $count)] : [],
+            'data' => $grid_data,
         ]);
         echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 

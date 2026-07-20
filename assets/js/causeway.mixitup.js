@@ -21,12 +21,13 @@
         // Initialize MixItUp
         var limitAttr = parseInt(grid.getAttribute('data-page-limit') || '0', 10);
         var hasPagination = !isNaN(limitAttr) && limitAttr > 0;
+        var initialSort = grid.getAttribute('data-initial-sort') || 'event:desc next:asc title:asc';
         var mixConfig = {
             selectors: { target: '.listing-card', pageList: '.causeway-page-list' },
             controls: { scope: hasPagination ? 'global' : 'local', live: true },
             animation: { enable: false, effects: 'fade scale(0.98)', duration: 220 },
             // Use attribute names without the `data-` prefix per MixItUp docs
-            load: { sort: 'event:desc next:asc title:asc' },
+            load: { sort: initialSort },
             callbacks: {
                 onMixStart: function () { },
                 onMixEnd: updateNoResults,
@@ -40,7 +41,7 @@
         // Explicit sort after init to ensure multi-criteria applied (some builds ignore load.sort with live controls)
         try {
             setTimeout(function () {
-                mixer.sort('event:desc next:asc title:asc');
+                mixer.sort(initialSort);
             }, 0);
         } catch (e) { console.warn('[MixItUp] sort invocation failed', e); }
 

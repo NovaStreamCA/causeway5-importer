@@ -9,7 +9,7 @@
  * - categories: comma-separated listings-category slugs
  * - communities: comma-separated listing-communities slugs
  * - areas: comma-separated listing-areas slugs
- * - orderby: date|title|menu_order (default date)
+ * - orderby: date|title|menu_order|rand (default date)
  * - order: ASC|DESC (default DESC)
  * - show_pagination: true|false (client-side JS pagination, uses per_page/page-limit data attribute)
  * - per_page: int page size for client pagination (defaults to `count` if omitted)
@@ -22,6 +22,7 @@
  * Usage examples:
  * [causeway_listings]
  * [causeway_listings count="9" columns="3" orderby="title" order="ASC"]
+ * [causeway_listings count="12" orderby="rand" show_pagination="true" per_page="6"]
  * [causeway_listings types="event,festival" categories="music,food" communities="charlottetown"]
  * [causeway_listings show_filterbar="true" filters="search,community,area" types="event"]
  * [causeway_listings show_pagination="true" per_page="6" count="12"]
@@ -111,12 +112,15 @@ class Causeway_Listings_Shortcodes {
         $per_page = (int)($atts['per_page'] !== '' ? $atts['per_page'] : 0);
         if ($per_page < 1) { $per_page = (int)$atts['count']; }
 
+        $orderby = sanitize_key(strtolower((string)$atts['orderby']));
+        $orderby = in_array($orderby, ['date', 'title', 'menu_order', 'rand'], true) ? $orderby : 'date';
+
         // Build args for shared renderer
         $loop_args = [
             'count' => (int)$atts['count'],
             'columns' => (int)$atts['columns'],
             'type' => $type,
-            'orderby' => in_array($atts['orderby'], ['date','title','menu_order'], true) ? $atts['orderby'] : 'date',
+            'orderby' => $orderby,
             'order' => strtoupper($atts['order']) === 'ASC' ? 'ASC' : 'DESC',
             'category' => $categories,
             'community' => $communities,
@@ -126,6 +130,10 @@ class Causeway_Listings_Shortcodes {
         if ($client_pagination) {
             // JS pagination: supply data attribute page-limit
             $loop_args['data'] = ['page-limit' => $per_page];
+        }
+        if ($orderby === 'rand') {
+            // Preserve WP_Query's randomized DOM order when MixItUp initializes.
+            $loop_args['data']['initial-sort'] = 'default:asc';
         }
 
         ob_start();

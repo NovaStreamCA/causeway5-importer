@@ -1100,7 +1100,7 @@ function causeway_enqueue_mixitup_scripts(): void {
     wp_register_script('mixitup', $base . 'mixitup.min.js', [], '3.3.1', true);
     wp_register_script('mixitup-multifilter', $base . 'mixitup-multifilter.min.js', ['mixitup'], '3.3.1', true);
     wp_register_script('mixitup-pagination', $base . 'mixitup-pagination.min.js', ['mixitup'], '3.3.1', true);
-    wp_register_script('causeway-mixitup-init', $base . 'causeway.mixitup.js', ['mixitup','mixitup-multifilter','mixitup-pagination'], '1.0.3', true);
+    wp_register_script('causeway-mixitup-init', $base . 'causeway.mixitup.js', ['mixitup','mixitup-multifilter','mixitup-pagination'], '1.0.4', true);
     wp_enqueue_script('causeway-mixitup-init');
 }
 
