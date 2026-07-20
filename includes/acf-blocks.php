@@ -185,6 +185,7 @@ class Causeway_ACF_Blocks {
                             'category' => 'Category',
                             'community' => 'Community',
                             'area' => 'Area',
+                            'clear' => 'Clear Filters Button',
                         ],
                         'default_value' => ['search', 'type', 'category', 'community', 'area'],
                         'layout' => 'vertical',

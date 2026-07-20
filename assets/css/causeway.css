@@ -118,6 +118,9 @@
   color: transparent;
   text-shadow: 0 0 0 #000;
 }
+.causeway-listings-section .causeway-filterbar .causeway-clear-filters {
+  align-self: stretch;
+}
 
 /* Listing archive / loop styles */
 .causeway-listings-grid {
@@ -144,6 +147,24 @@
 .causeway-listings-no-results p {
   margin: 0;
   color: rgba(0, 0, 0, 0.65);
+}
+.causeway-listings-no-results .causeway-clear-filters {
+  margin-top: 1rem;
+}
+
+.causeway-clear-filters {
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--bs-primary, #0073aa);
+  border-radius: 0.75rem;
+  background: transparent;
+  color: var(--bs-primary, #0073aa);
+  font: inherit;
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s;
+}
+.causeway-clear-filters:hover, .causeway-clear-filters:focus-visible {
+  background: var(--bs-primary, #0073aa);
+  color: #fff;
 }
 
 .causeway-listings-grid.cols-1 {

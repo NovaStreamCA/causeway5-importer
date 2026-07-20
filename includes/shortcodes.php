@@ -14,7 +14,7 @@
  * - show_pagination: true|false (client-side JS pagination, uses per_page/page-limit data attribute)
  * - per_page: int page size for client pagination (defaults to `count` if omitted)
  * - show_filterbar: true|false (include filterbar template like block)
- * - filters: comma-separated controls: search,type,category,community,area
+ * - filters: comma-separated controls: search,type,category,community,area,clear
  *
  * Deprecated:
  * - pagination: legacy server-side flag (alias to show_pagination when true). Server-side pagination removed.
@@ -59,7 +59,7 @@ class Causeway_Listings_Shortcodes {
         $show_filterbar    = filter_var($atts['show_filterbar'], FILTER_VALIDATE_BOOLEAN);
 
         // Filterbar controls.
-        $allowed_filters = ['search', 'type', 'category', 'community', 'area'];
+        $allowed_filters = ['search', 'type', 'category', 'community', 'area', 'clear'];
         $enabled_filters = [];
         foreach (explode(',', (string)$atts['filters']) as $filter) {
             $filter = sanitize_key(trim($filter));

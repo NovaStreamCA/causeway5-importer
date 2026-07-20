@@ -51,6 +51,7 @@
         var catSelect = root.querySelector('[data-role="select-cat"]');
         var communitySelect = root.querySelector('[data-role="select-community"]');
         var areaSelect = root.querySelector('[data-role="select-area"]');
+        var clearButtons = root.querySelectorAll('[data-role="clear-filters"]');
 
         function normalize(s) { return (s || '').toString().toLowerCase().trim(); }
 
@@ -159,12 +160,31 @@
         function onCat() { state.cat = normalize(catSelect ? catSelect.value : ''); applyFilter(); }
         function onCommunity() { state.community = normalize(communitySelect ? communitySelect.value : ''); applyFilter(); }
         function onArea() { state.area = normalize(areaSelect ? areaSelect.value : ''); applyFilter(); }
+        function clearFilters() {
+            clearTimeout(tId);
+            state.query = '';
+            state.type = '';
+            state.cat = '';
+            state.community = '';
+            state.area = '';
+
+            if (searchInput) searchInput.value = '';
+            if (typeSelect) typeSelect.value = '';
+            if (catSelect) catSelect.value = '';
+            if (communitySelect) communitySelect.value = '';
+            if (areaSelect) areaSelect.value = '';
+
+            applyFilter();
+        }
 
         if (searchInput) searchInput.addEventListener('input', onSearch);
         if (typeSelect) typeSelect.addEventListener('change', onType);
         if (catSelect) catSelect.addEventListener('change', onCat);
         if (communitySelect) communitySelect.addEventListener('change', onCommunity);
         if (areaSelect) areaSelect.addEventListener('change', onArea);
+        Array.prototype.forEach.call(clearButtons, function (button) {
+            button.addEventListener('click', clearFilters);
+        });
 
         // Remove options which cannot match anything in this particular grid.
         updateAvailableOptions();

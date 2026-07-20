@@ -89,6 +89,7 @@ class Causeway_Listings_Loop {
             echo '<div class="causeway-listings-no-results" role="status" aria-live="polite" hidden>';
             echo '<h3 class="text-primary fw-bold">' . esc_html__('No listings found', 'causeway') . '</h3>';
             echo '<p>' . esc_html__('Try adjusting your search or filters.', 'causeway') . '</p>';
+            echo '<button type="button" class="causeway-clear-filters" data-role="clear-filters">' . esc_html__('Clear filters', 'causeway') . '</button>';
             echo '</div>';
             if (!empty($args['show_pagination'])) {
                 echo '<div class="causeway-pagination">';
@@ -104,6 +105,7 @@ class Causeway_Listings_Loop {
             echo '<div class="causeway-listings-no-results" role="status">';
             echo '<h3>' . esc_html__('No listings found', 'causeway') . '</h3>';
             echo '<p>' . esc_html__('Try adjusting your search or filters.', 'causeway') . '</p>';
+            echo '<button type="button" class="causeway-clear-filters" data-role="clear-filters">' . esc_html__('Clear filters', 'causeway') . '</button>';
             echo '</div>';
         }
         return trim(ob_get_clean());

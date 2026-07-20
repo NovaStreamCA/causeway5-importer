@@ -8,7 +8,7 @@
  */
 if (!defined('ABSPATH')) { exit; }
 
-$available_filters = ['search', 'type', 'category', 'community', 'area'];
+$available_filters = ['search', 'type', 'category', 'community', 'area', 'clear'];
 if (!isset($enabled_filters) || !is_array($enabled_filters)) {
     $enabled_filters = $available_filters;
 }
@@ -115,6 +115,12 @@ $render_category_options = static function ($parent_id = 0, $depth = 0) use (&$r
                     <?php endforeach; ?>
                 <?php endif; ?>
             </select>
+        <?php endif; ?>
+
+        <?php if (in_array('clear', $enabled_filters, true)) : ?>
+            <button type="button" class="causeway-clear-filters" data-role="clear-filters">
+                <?php esc_html_e('Clear filters', 'causeway'); ?>
+            </button>
         <?php endif; ?>
     </div>
     <!-- You can add client-side pagination controls later here -->
