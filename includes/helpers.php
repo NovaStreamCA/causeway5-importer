@@ -5,6 +5,58 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+if (!function_exists('causeway_get_listing_image_alt')) {
+    /**
+     * Return image alt text from a listing's attachments repeater.
+     *
+     * When no row is supplied, resolve the row used for the featured image by
+     * its saved source URL, then by the Primary category, then by the first row.
+     */
+    function causeway_get_listing_image_alt(int $post_id, ?array $attachment = null): string {
+        $attachments = get_field('attachments', $post_id) ?: [];
+
+        if ($attachment === null && is_array($attachments)) {
+            $featured_source = (string) get_post_meta($post_id, '_causeway_featured_image_source', true);
+
+            if ($featured_source !== '') {
+                foreach ($attachments as $row) {
+                    if (!empty($row['url']) && $row['url'] === $featured_source) {
+                        $attachment = $row;
+                        break;
+                    }
+                }
+            }
+
+            if ($attachment === null) {
+                foreach ($attachments as $row) {
+                    if (!empty($row['url']) && !empty($row['category']) && strcasecmp(trim((string) $row['category']), 'Primary') === 0) {
+                        $attachment = $row;
+                        break;
+                    }
+                }
+            }
+
+            if ($attachment === null && isset($attachments[0]) && is_array($attachments[0])) {
+                $attachment = $attachments[0];
+            }
+        }
+
+        if (!empty($attachment['alt'])) {
+            return trim(wp_strip_all_tags((string) $attachment['alt']));
+        }
+
+        $thumbnail_id = get_post_thumbnail_id($post_id);
+        if ($thumbnail_id) {
+            $media_alt = trim((string) get_post_meta($thumbnail_id, '_wp_attachment_image_alt', true));
+            if ($media_alt !== '') {
+                return $media_alt;
+            }
+        }
+
+        return wp_strip_all_tags(get_the_title($post_id));
+    }
+}
+
 if (!function_exists('causeway_parse_occ_dt')) {
     /**
      * Strict parser: always interpret date portion as dd/mm/YYYY (European style) with optional time.

@@ -94,7 +94,9 @@ if ($is_event && !empty($nextDate)) {
 <article <?php post_class('listing-card' . $filter_classes . $cat_classes . $community_classes . $area_classes); ?> data-title="<?php echo esc_attr($title_attr); ?>" data-event="<?php echo $is_event ? '1' : '0'; ?>" data-next="<?php echo (string)(int)$sortNextTs; ?>" data-types="<?php echo esc_attr(implode(',', $type_slugs)); ?>">
     <a href="<?php echo esc_url(get_permalink()); ?>" class="thumb">
         <?php if (has_post_thumbnail()) {
-            the_post_thumbnail('medium_large');
+            the_post_thumbnail('medium_large', [
+                'alt' => causeway_get_listing_image_alt($post_id),
+            ]);
         } ?>
         <div class="thumb-overlay">
             <?php if (!is_wp_error($types) && !empty($types)) : ?>

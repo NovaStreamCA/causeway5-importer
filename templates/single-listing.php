@@ -118,19 +118,19 @@ while (have_posts()) : the_post();
         <div class="hero hero-layout <?php if(empty($attachments[1]['url'])) echo 'single-image'; ?>">
             <div class="main-image">
                 <?php if(!empty($attachments[0]['url'])): ?>
-                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[0]['url']); ?>" data-spotlight="listing-gallery">
-                    <img src="<?php echo esc_url($attachments[0]['url']); ?>" alt="Listing Image">
+                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[0]['url']); ?>" data-spotlight="listing-gallery" data-title="<?php echo esc_attr(causeway_get_listing_image_alt($post_id, $attachments[0])); ?>">
+                    <img src="<?php echo esc_url($attachments[0]['url']); ?>" alt="<?php echo esc_attr(causeway_get_listing_image_alt($post_id, $attachments[0])); ?>">
                 </a>
                 <?php endif; ?>
             </div>
             <?php if(!empty($attachments[1]['url'])): ?>
             <div class="secondary-image">
-                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[1]['url']); ?>" data-spotlight="listing-gallery">
-                    <img src="<?php echo esc_url($attachments[1]['url']); ?>" alt="Listing Image">
+                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[1]['url']); ?>" data-spotlight="listing-gallery" data-title="<?php echo esc_attr(causeway_get_listing_image_alt($post_id, $attachments[1])); ?>">
+                    <img src="<?php echo esc_url($attachments[1]['url']); ?>" alt="<?php echo esc_attr(causeway_get_listing_image_alt($post_id, $attachments[1])); ?>">
                 </a>
                 <?php if(!empty($attachments[2]['url'])): ?>
-                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[2]['url']); ?>" data-spotlight="listing-gallery">
-                    <img src="<?php echo esc_url($attachments[2]['url']); ?>" alt="Listing Image">
+                <a class="img-wrap spotlight" href="<?php echo esc_url($attachments[2]['url']); ?>" data-spotlight="listing-gallery" data-title="<?php echo esc_attr(causeway_get_listing_image_alt($post_id, $attachments[2])); ?>">
+                    <img src="<?php echo esc_url($attachments[2]['url']); ?>" alt="<?php echo esc_attr(causeway_get_listing_image_alt($post_id, $attachments[2])); ?>">
                 </a>
                 <?php endif; ?>
             </div>
@@ -191,8 +191,8 @@ while (have_posts()) : the_post();
                             <?php foreach ($attachments as $i => $att) : if (empty($att['url'])) continue; ?>
                                 <?php if ($i === 0) continue; // skip hero already shown ?>
                                 <figure>
-                                    <a href="<?php echo esc_url($att['url']); ?>" class='spotlight'>
-                                    <img src="<?php echo esc_url($att['url']); ?>" alt="<?php echo esc_attr($att['alt'] ?? ''); ?>" />
+                                    <a href="<?php echo esc_url($att['url']); ?>" class="spotlight" data-spotlight="listing-gallery" data-title="<?php echo esc_attr(causeway_get_listing_image_alt($post_id, $att)); ?>">
+                                    <img src="<?php echo esc_url($att['url']); ?>" alt="<?php echo esc_attr(causeway_get_listing_image_alt($post_id, $att)); ?>" />
                                     </a>
                                 </figure>
                             <?php endforeach; ?>

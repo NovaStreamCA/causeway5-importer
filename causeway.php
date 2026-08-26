@@ -1121,6 +1121,13 @@ add_action('wp_enqueue_scripts', function () {
             true
         );
         wp_enqueue_script('spotlight');
+        wp_enqueue_script(
+            'causeway-spotlight-accessibility',
+            plugin_dir_url(__FILE__) . 'assets/js/causeway.spotlight-accessibility.js',
+            ['spotlight'],
+            '1.0.0',
+            true
+        );
     }
 
     // MixItUp for listings filtering/pagination (enqueued when listings grid is present)

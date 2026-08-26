@@ -62,7 +62,11 @@ get_header();
             ?>
             <article <?php post_class('listing-card'); ?> data-title="<?php echo esc_attr($title_attr); ?>" data-event="<?php echo $is_event ? '1' : '0'; ?>" data-next="<?php echo (string)(int)$sortNextTs; ?>" data-types="<?php echo esc_attr(implode(',', $type_slugs)); ?>">
                 <a href="<?php the_permalink(); ?>" class="thumb">
-                    <?php if (has_post_thumbnail()) { the_post_thumbnail('medium_large'); } ?>
+                    <?php if (has_post_thumbnail()) {
+                        the_post_thumbnail('medium_large', [
+                            'alt' => causeway_get_listing_image_alt($post_id),
+                        ]);
+                    } ?>
                 </a>
                 <div class="body">
                     <h2 class="title"><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h2>
