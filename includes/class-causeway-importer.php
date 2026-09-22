@@ -1267,6 +1267,23 @@ class Causeway_Importer
             self::log("🔎 Applied filters: areas=" . json_encode($area_causeway_ids) . ", communities=" . json_encode($community_causeway_ids) . " | kept {$post_count}/{$pre_count}");
         }
 
+        $is_headless = (bool) get_field('is_headless', 'option');
+        $unavailable_listings = [];
+
+        // The tombstone feed is only needed by the external frontend. Avoid the
+        // additional large API request entirely on traditional WordPress sites.
+        if ($is_headless) {
+            $unavailable_listings = self::fetch_unavailable_listings();
+            if (!empty($area_causeway_ids) || !empty($community_causeway_ids)) {
+                $unavailable_listings = array_values(array_filter(
+                    $unavailable_listings,
+                    function ($item) use ($area_causeway_ids, $community_causeway_ids) {
+                        return self::listing_matches_location_filters($item, $area_causeway_ids, $community_causeway_ids);
+                    }
+                ));
+            }
+        }
+
         // Deduplicate payload by Causeway ID to prevent double-processing in a single run
         $pre_dedupe = is_array($listings) ? count($listings) : 0;
         self::log('📦 Listings count pre-dedupe: ' . $pre_dedupe . ' @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
@@ -1592,6 +1609,9 @@ class Causeway_Importer
         self::update_status();
         self::set_phase('export');
 
+        if ($is_headless) {
+            self::sync_unavailable_listings($unavailable_listings, $imported_ids);
+        }
         self::delete_old_listings($imported_ids);
 
         // Final cleanup: collapse any duplicates that may exist with same causeway_id (keep lowest ID)
@@ -1601,6 +1621,85 @@ class Causeway_Importer
         // remaining in their translation group (trid). This prevents orphaned translations from
         // lingering when the EN post was force-deleted and a new EN post is imported.
         self::delete_orphan_translated_listings();
+    }
+
+    /**
+     * Fetch only records that Causeway says are not currently published.
+     * The explicit allow-list prevents an unexpected future API status from
+     * becoming publicly consumable without a deliberate plugin change.
+     */
+    private static function fetch_unavailable_listings(): array
+    {
+        $endpoint = add_query_arg([
+            'search' => 'listings.status',
+            'compare' => '!=',
+            'value' => 'Published',
+        ], self::$baseURL . 'listings');
+
+        $endpoint = apply_filters('causeway_import_unavailable_listings_endpoint', $endpoint);
+        self::log('Unavailable listings endpoint: ' . $endpoint);
+
+        $response = wp_remote_get($endpoint, [
+            'timeout' => 1200,
+        ]);
+
+        if (is_wp_error($response)) {
+            self::log('❌ Failed to fetch unavailable listings: ' . $response->get_error_message());
+            return [];
+        }
+
+        $http_code = (int) wp_remote_retrieve_response_code($response);
+        $body = (string) wp_remote_retrieve_body($response);
+        if ($http_code < 200 || $http_code >= 300) {
+            self::log('❌ Unavailable listings request returned HTTP ' . $http_code);
+            return [];
+        }
+
+        $records = json_decode($body, true);
+        if (!is_array($records)) {
+            self::log('❌ Invalid unavailable listings data');
+            return [];
+        }
+
+        $allowed_statuses = ['deleted', 'draft', 'expired'];
+        $deduped = [];
+        foreach ($records as $item) {
+            $causeway_id = isset($item['id']) ? (int) $item['id'] : 0;
+            $status = strtolower(trim((string) ($item['status'] ?? '')));
+            if ($causeway_id <= 0 || !in_array($status, $allowed_statuses, true)) {
+                continue;
+            }
+
+            // Keep the last upstream record for an ID if a malformed response
+            // happens to contain it more than once.
+            $deduped[$causeway_id] = $item;
+        }
+
+        self::log('✅ Received ' . count($deduped) . ' unavailable listings from API');
+        return array_values($deduped);
+    }
+
+    private static function listing_matches_location_filters(array $item, array $area_ids, array $community_ids): bool
+    {
+        if (empty($area_ids) && empty($community_ids)) {
+            return true;
+        }
+
+        foreach ((array) ($item['locations'] ?? []) as $location) {
+            $community_id = (int) ($location['community']['id'] ?? 0);
+            if ($community_id > 0 && in_array($community_id, $community_ids, true)) {
+                return true;
+            }
+
+            foreach ((array) ($location['community']['areas'] ?? []) as $area) {
+                $area_id = (int) ($area['id'] ?? 0);
+                if ($area_id > 0 && in_array($area_id, $area_ids, true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1889,6 +1988,175 @@ class Causeway_Importer
         }
     }
 
+    /**
+     * Upsert all authoritative unavailable records and remove tombstones for
+     * listings that have returned to the published import.
+     */
+    private static function sync_unavailable_listings(array $items, array $published_ids): void
+    {
+        $synced = 0;
+        foreach ($items as $item) {
+            if (self::upsert_unavailable_listing($item, 'causeway')) {
+                $synced++;
+            }
+        }
+
+        $removed = 0;
+        $published_ids = array_values(array_unique(array_filter(array_map('intval', $published_ids))));
+        foreach ($published_ids as $causeway_id) {
+            $post_id = self::get_unavailable_listing_post_id($causeway_id);
+            if ($post_id > 0) {
+                wp_delete_post($post_id, true);
+                $removed++;
+            }
+        }
+
+        self::log("✅ Synced {$synced} unavailable listings; removed {$removed} republished tombstones");
+    }
+
+    private static function get_unavailable_listing_post_id(int $causeway_id): int
+    {
+        if ($causeway_id <= 0) {
+            return 0;
+        }
+
+        $posts = get_posts([
+            'post_type' => 'unavailable_listing',
+            'post_status' => 'any',
+            'posts_per_page' => 1,
+            'fields' => 'ids',
+            'meta_key' => 'causeway_id',
+            'meta_value' => $causeway_id,
+            'suppress_filters' => true,
+        ]);
+
+        return !empty($posts) ? (int) $posts[0] : 0;
+    }
+
+    private static function upsert_unavailable_listing(array $item, string $source): int
+    {
+        $causeway_id = (int) ($item['id'] ?? 0);
+        if ($causeway_id <= 0) {
+            return 0;
+        }
+
+        $post_id = self::get_unavailable_listing_post_id($causeway_id);
+        $name = trim((string) ($item['name'] ?? ''));
+        $listing_slug = sanitize_title((string) ($item['slug'] ?? ''));
+        $status = trim((string) ($item['status'] ?? 'Unavailable'));
+        if ($name === '') {
+            $name = 'Listing #' . $causeway_id;
+        }
+
+        $previous_status = $post_id > 0 ? (string) get_post_meta($post_id, 'status', true) : '';
+        $post_data = [
+            'post_type' => 'unavailable_listing',
+            'post_status' => 'publish',
+            'post_title' => $name,
+            // This is an internal unique slug. The public listing slug is kept
+            // separately so it can be matched by the Angular application.
+            'post_name' => 'causeway-' . $causeway_id,
+        ];
+
+        if ($post_id > 0) {
+            $post_data['ID'] = $post_id;
+            $result = wp_update_post($post_data, true);
+        } else {
+            $result = wp_insert_post($post_data, true);
+        }
+
+        if (is_wp_error($result) || !$result) {
+            self::log('❌ Failed to save unavailable listing ' . $causeway_id);
+            return 0;
+        }
+
+        $post_id = (int) $result;
+        $types = self::normalize_unavailable_terms($item['types'] ?? []);
+        $categories = self::normalize_unavailable_terms($item['categories'] ?? []);
+        $changed_at = ($previous_status === '' || strcasecmp($previous_status, $status) !== 0)
+            ? current_time('mysql', true)
+            : (string) get_post_meta($post_id, 'status_changed_at', true);
+
+        // Use field keys so ACF creates the reference metadata required to read
+        // repeater values consistently in both wp-admin and the exporter.
+        update_field('field_unavailable_causeway_id', $causeway_id, $post_id);
+        update_field('field_unavailable_listing_slug', $listing_slug, $post_id);
+        update_field('field_unavailable_listing_status', $status, $post_id);
+        update_field('field_unavailable_expired_at', $item['expired_at'] ?? '', $post_id);
+        update_field('field_unavailable_status_source', $source, $post_id);
+        update_field('field_unavailable_status_changed_at', $changed_at, $post_id);
+        update_field('field_unavailable_listing_types', $types, $post_id);
+        update_field('field_unavailable_listing_categories', $categories, $post_id);
+
+        return $post_id;
+    }
+
+    private static function normalize_unavailable_terms($items): array
+    {
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $id = (int) ($item['id'] ?? 0);
+            $name = trim((string) ($item['name'] ?? ''));
+            if ($id <= 0 && $name === '') {
+                continue;
+            }
+
+            $normalized[] = [
+                'id' => $id,
+                'name' => $name,
+                'slug' => sanitize_title((string) ($item['slug'] ?? $name)),
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * If a record vanishes from both Causeway feeds, retain its last-known
+     * identity. This should be rare, but still lets the frontend distinguish a
+     * previously valid URL from a URL that never existed.
+     */
+    private static function ensure_inferred_unavailable_listing(int $listing_post_id, int $causeway_id): void
+    {
+        if (!get_field('is_headless', 'option') || $causeway_id <= 0 || self::get_unavailable_listing_post_id($causeway_id) > 0) {
+            return;
+        }
+
+        $term_rows = static function (string $taxonomy) use ($listing_post_id): array {
+            $rows = [];
+            $terms = wp_get_post_terms($listing_post_id, $taxonomy);
+            if (is_wp_error($terms)) {
+                return $rows;
+            }
+            foreach ($terms as $term) {
+                $rows[] = [
+                    'id' => (int) get_field('causeway_id', $taxonomy . '_' . $term->term_id),
+                    'name' => (string) $term->name,
+                    'slug' => (string) $term->slug,
+                ];
+            }
+            return $rows;
+        };
+
+        self::upsert_unavailable_listing([
+            'id' => $causeway_id,
+            'name' => get_the_title($listing_post_id),
+            'slug' => get_post_field('post_name', $listing_post_id),
+            'status' => 'Unavailable',
+            'expired_at' => get_post_meta($listing_post_id, 'expired_at', true),
+            'types' => $term_rows('listing-type'),
+            'categories' => $term_rows('listings-category'),
+        ], 'inferred');
+    }
+
     private static function delete_old_listings($imported_ids)
     {
         self::log("Deleting old listings...");
@@ -1919,6 +2187,10 @@ class Causeway_Importer
 
             // Delete if no causeway_id OR causeway_id not in imported_ids
             if (is_null($causeway_id) || !isset($imported_ids_map[$causeway_id])) {
+                if (!is_null($causeway_id) && $causeway_id > 0) {
+                    self::ensure_inferred_unavailable_listing($post_id, $causeway_id);
+                }
+
                 // Remove featured image attachment if safe to do so (non-headless only)
                 if (!get_field('is_headless', 'option')) {
                     $thumb_id = get_post_thumbnail_id($post_id);

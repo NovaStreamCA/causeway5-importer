@@ -352,6 +352,86 @@ function causeway_register_acf_fields() {
             ],
         ]);
 
+        // Unavailable Listing tombstones
+        acf_add_local_field_group([
+            'key' => 'group_unavailable_listing_details',
+            'title' => 'Draft/Stale/Deleted Listing Details',
+            'fields' => [
+                [
+                    'key' => 'field_unavailable_causeway_id',
+                    'label' => 'Causeway ID',
+                    'name' => 'causeway_id',
+                    'type' => 'number',
+                ],
+                [
+                    'key' => 'field_unavailable_listing_slug',
+                    'label' => 'Original Slug',
+                    'name' => 'listing_slug',
+                    'type' => 'text',
+                ],
+                [
+                    'key' => 'field_unavailable_listing_status',
+                    'label' => 'Causeway Status',
+                    'name' => 'status',
+                    'type' => 'text',
+                ],
+                [
+                    'key' => 'field_unavailable_expired_at',
+                    'label' => 'Expired At',
+                    'name' => 'expired_at',
+                    'type' => 'text',
+                ],
+                [
+                    'key' => 'field_unavailable_status_source',
+                    'label' => 'Status Source',
+                    'name' => 'status_source',
+                    'type' => 'text',
+                ],
+                [
+                    'key' => 'field_unavailable_status_changed_at',
+                    'label' => 'Status Last Changed',
+                    'name' => 'status_changed_at',
+                    'type' => 'text',
+                ],
+                [
+                    'key' => 'field_unavailable_listing_types',
+                    'label' => 'Types',
+                    'name' => 'listing_types',
+                    'type' => 'repeater',
+                    'layout' => 'table',
+                    'sub_fields' => [
+                        ['key' => 'field_unavailable_type_id', 'label' => 'ID', 'name' => 'id', 'type' => 'number'],
+                        ['key' => 'field_unavailable_type_name', 'label' => 'Name', 'name' => 'name', 'type' => 'text'],
+                        ['key' => 'field_unavailable_type_slug', 'label' => 'Slug', 'name' => 'slug', 'type' => 'text'],
+                    ],
+                ],
+                [
+                    'key' => 'field_unavailable_listing_categories',
+                    'label' => 'Categories',
+                    'name' => 'listing_categories',
+                    'type' => 'repeater',
+                    'layout' => 'table',
+                    'sub_fields' => [
+                        ['key' => 'field_unavailable_category_id', 'label' => 'ID', 'name' => 'id', 'type' => 'number'],
+                        ['key' => 'field_unavailable_category_name', 'label' => 'Name', 'name' => 'name', 'type' => 'text'],
+                        ['key' => 'field_unavailable_category_slug', 'label' => 'Slug', 'name' => 'slug', 'type' => 'text'],
+                    ],
+                ],
+            ],
+            'location' => [
+                [
+                    [
+                        'param' => 'post_type',
+                        'operator' => '==',
+                        'value' => 'unavailable_listing',
+                    ],
+                ],
+            ],
+            'position' => 'normal',
+            'style' => 'default',
+            'active' => true,
+        ]);
+
         // Listing
         acf_add_local_field_group([
             'key' => 'group_listing_details',

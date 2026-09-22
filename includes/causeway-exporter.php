@@ -18,6 +18,12 @@ add_action('init', function () {
             'permission_callback' => '__return_true',
         ]);
 
+        register_rest_route('causeway/v1', '/unavailable-listings', [
+            'methods'  => 'GET',
+            'callback' => 'causeway_get_unavailable_listings',
+            'permission_callback' => '__return_true',
+        ]);
+
         register_rest_route('causeway/v1', '/taxonomy/(?P<taxonomy>[a-zA-Z0-9_-]+)', [
             'methods'  => 'GET',
             'callback' => 'get_taxonomy_terms_with_acf',
@@ -25,6 +31,86 @@ add_action('init', function () {
         ]);
     });
 });
+
+/**
+ * Return lightweight records for listings whose current Causeway status is
+ * Draft, Expired, or Deleted. An inferred "Unavailable" status is possible
+ * for a listing that disappeared from both upstream feeds.
+ *
+ * Supported query parameters: id (Causeway ID), slug, status, per_page, page.
+ */
+function causeway_get_unavailable_listings(WP_REST_Request $request)
+{
+    $requested_id = absint($request->get_param('id'));
+    $requested_slug = sanitize_title((string) $request->get_param('slug'));
+    $requested_status = sanitize_text_field((string) $request->get_param('status'));
+    $per_page = (int) ($request->get_param('per_page') ?: -1);
+    $page = max(1, (int) ($request->get_param('page') ?: 1));
+
+    $args = [
+        'post_type' => 'unavailable_listing',
+        'post_status' => 'publish',
+        'posts_per_page' => $per_page,
+        'paged' => $page,
+        'orderby' => 'title',
+        'order' => 'ASC',
+        'no_found_rows' => false,
+    ];
+
+    $meta_query = [];
+    if ($requested_id > 0) {
+        $meta_query[] = [
+            'key' => 'causeway_id',
+            'value' => $requested_id,
+            'compare' => '=',
+            'type' => 'NUMERIC',
+        ];
+    }
+    if ($requested_slug !== '') {
+        $meta_query[] = [
+            'key' => 'listing_slug',
+            'value' => $requested_slug,
+            'compare' => '=',
+        ];
+    }
+    if ($requested_status !== '') {
+        $meta_query[] = [
+            'key' => 'status',
+            'value' => $requested_status,
+            'compare' => '=',
+        ];
+    }
+    if (!empty($meta_query)) {
+        $args['meta_query'] = $meta_query;
+    }
+
+    $query = new WP_Query($args);
+    $results = [];
+
+    foreach ($query->posts as $post) {
+        $post_id = (int) $post->ID;
+        $types = function_exists('get_field') ? get_field('listing_types', $post_id) : [];
+        $categories = function_exists('get_field') ? get_field('listing_categories', $post_id) : [];
+
+        $results[] = [
+            'id' => (int) get_post_meta($post_id, 'causeway_id', true),
+            'name' => html_entity_decode(get_the_title($post)),
+            'slug' => (string) get_post_meta($post_id, 'listing_slug', true),
+            'status' => (string) get_post_meta($post_id, 'status', true),
+            'types' => is_array($types) ? array_values($types) : [],
+            'categories' => is_array($categories) ? array_values($categories) : [],
+            'expired_at' => get_post_meta($post_id, 'expired_at', true) ?: null,
+            'status_source' => (string) get_post_meta($post_id, 'status_source', true),
+            'status_changed_at' => get_post_meta($post_id, 'status_changed_at', true) ?: null,
+        ];
+    }
+
+    $response = rest_ensure_response($results);
+    $response->header('X-WP-Total', (int) $query->found_posts);
+    $response->header('X-WP-TotalPages', (int) $query->max_num_pages);
+
+    return $response;
+}
 
 /*
 Start Listings

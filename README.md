@@ -33,6 +33,7 @@ When headless is ON:
 - Export cron is scheduled twice daily (`causeway_cron_export_hook`).
 - REST endpoints are registered:
   - GET /wp-json/causeway/v1/listings
+  - GET /wp-json/causeway/v1/unavailable-listings
   - GET /wp-json/causeway/v1/taxonomy/{taxonomy}
 - After a successful import, the plugin notifies the external site by POSTing to:
   - {public_url}/api/fetch-causeway with `x-causeway-secret` header
@@ -52,8 +53,19 @@ When headless is ON:
 
 - GET /wp-json/causeway/v1/listings
   - Lists published listings with ACF-enriched fields, taxonomy data, and optional translations.
+- GET /wp-json/causeway/v1/unavailable-listings
+  - Lists lightweight tombstones for Causeway listings whose current status is `Draft`, `Expired`, or `Deleted`.
+  - Supports `id`, `slug`, `status`, `per_page`, and `page` query parameters.
+  - Each item contains `id`, `name`, `slug`, `status`, `types`, `categories`, `expired_at`, `status_source`, and `status_changed_at`.
+  - A rare inferred record uses status `Unavailable` and `status_source: inferred` when an existing listing disappears from both upstream feeds.
 - GET /wp-json/causeway/v1/taxonomy/{taxonomy}
   - Returns all terms for a given taxonomy with ACF fields and relationships.
+
+In headless mode, the importer makes a separate Causeway listings request filtered
+to records whose status is not `Published`, then accepts only `Draft`, `Expired`,
+and `Deleted`. This request is skipped completely in non-headless environments.
+When one of these records becomes published again, its unavailable tombstone is
+removed automatically.
 
 Notes:
 - ACF is optional for the exporter payload; values are included when fields exist.

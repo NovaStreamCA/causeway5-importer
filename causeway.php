@@ -4,7 +4,7 @@
 /**
  * Plugin Name: Causeway Listings Importer
  * Description: Imports listings and taxonomies from Causeway API into WordPress with WPML and ACF integration.
- * Version: 1.1.19
+ * Version: 1.1.20
  * Author: NovaStream
  * Update URI: https://github.com/NovaStreamCA/causeway5-importer
  * 
@@ -91,6 +91,38 @@ function causeway_register_listing_post_type()
     ]);
 }
 add_action('init', 'causeway_register_listing_post_type');
+
+/**
+ * Lightweight tombstones for Causeway records that can no longer be shown.
+ * These posts are intentionally not routable; headless clients consume them
+ * through the plugin's dedicated REST endpoint.
+ */
+function causeway_register_unavailable_listing_post_type()
+{
+    register_post_type('unavailable_listing', [
+        'labels' => [
+            'name' => __('Draft/Stale/Deleted Listings', 'causeway'),
+            'singular_name' => __('Draft/Stale/Deleted Listing', 'causeway'),
+            'all_items' => __('Draft/Stale/Deleted Listings', 'causeway'),
+            'edit_item' => __('View Draft/Stale/Deleted Listing', 'causeway'),
+            'search_items' => __('Search Draft/Stale/Deleted Listings', 'causeway'),
+            'not_found' => __('No draft, stale, or deleted listings found', 'causeway'),
+            'menu_name' => __('Draft/Stale/Deleted Listings', 'causeway'),
+        ],
+        'public' => false,
+        'publicly_queryable' => false,
+        'exclude_from_search' => true,
+        'show_ui' => true,
+        'show_in_menu' => 'edit.php?post_type=listing',
+        'show_in_admin_bar' => false,
+        'show_in_nav_menus' => false,
+        'show_in_rest' => false,
+        'query_var' => false,
+        'rewrite' => false,
+        'supports' => ['title'],
+    ]);
+}
+add_action('init', 'causeway_register_unavailable_listing_post_type');
 
 function causeway_register_taxonomies()
 {
@@ -518,6 +550,7 @@ add_action('acf/save_post', function ($post_id) {
 register_activation_hook(__FILE__, function () {
     // Ensure registration happens before flush so rules exist
     causeway_register_listing_post_type();
+    causeway_register_unavailable_listing_post_type();
     causeway_register_taxonomies();
 
     causeway_sync_cron_schedule();
