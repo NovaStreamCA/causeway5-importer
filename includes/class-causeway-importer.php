@@ -15,6 +15,81 @@ class Causeway_Importer
     private static $total_listings = 0;
     private static $processed_listings = 0;
     private static $current_phase = '';
+    private static $run_id = '';
+    private static $current_listing = [];
+    private static $run_mode = '';
+
+    private static function update_tracking(array $data): void
+    {
+        $tracking = get_option('causeway_import_tracking', []);
+        if (!is_array($tracking)) {
+            $tracking = [];
+        }
+
+        update_option('causeway_import_tracking', array_merge($tracking, $data, [
+            'updated_at' => time(),
+        ]), false);
+    }
+
+    private static function track_import_start(string $mode): void
+    {
+        self::$run_mode = $mode;
+        self::update_tracking([
+            'last_import_started_at' => time(),
+            'last_import_status' => 'running',
+            'last_import_mode' => $mode,
+            'last_import_run_id' => self::$run_id,
+            'last_import_duration_seconds' => null,
+            'last_import_processed' => 0,
+            'last_import_total' => 0,
+            'last_import_error' => null,
+        ]);
+    }
+
+    private static function track_import_success(): void
+    {
+        $tracking = get_option('causeway_import_tracking', []);
+        $tracked_run_id = is_array($tracking) ? (string) ($tracking['last_import_run_id'] ?? '') : '';
+        if ($tracked_run_id !== '' && !hash_equals($tracked_run_id, self::$run_id)) {
+            return;
+        }
+
+        self::update_tracking([
+            'last_import_succeeded_at' => time(),
+            'last_import_status' => 'success',
+            'last_import_mode' => self::$run_mode,
+            'last_import_run_id' => self::$run_id,
+            'last_import_duration_seconds' => self::$start ? round(microtime(true) - self::$start, 2) : null,
+            'last_import_processed' => self::$processed_listings,
+            'last_import_total' => self::$total_listings,
+            'last_import_error' => null,
+        ]);
+    }
+
+    private static function track_import_failure(Throwable $error): void
+    {
+        $tracking = get_option('causeway_import_tracking', []);
+        $tracked_run_id = is_array($tracking) ? (string) ($tracking['last_import_run_id'] ?? '') : '';
+        if ($tracked_run_id !== '' && !hash_equals($tracked_run_id, self::$run_id)) {
+            return;
+        }
+        if (is_array($tracking) && ($tracking['last_import_status'] ?? '') === 'success') {
+            // The import itself completed; a later export/shutdown issue is tracked separately.
+            return;
+        }
+
+        $failure = self::failure_status($error);
+        self::update_tracking([
+            'last_import_failed_at' => time(),
+            'last_import_status' => 'failed',
+            'last_import_mode' => self::$run_mode,
+            'last_import_run_id' => self::$run_id,
+            'last_import_duration_seconds' => self::$start ? round(microtime(true) - self::$start, 2) : null,
+            'last_import_processed' => self::$processed_listings,
+            'last_import_total' => self::$total_listings,
+            'last_import_error' => $failure['error_message'],
+        ]);
+    }
 
     private static function is_importer_enabled(): bool
     {
@@ -46,10 +121,16 @@ class Causeway_Importer
 
     private static function update_status(array $data = []): void
     {
-        // Merge with existing
         $status = get_option('causeway_import_status', []);
         if (!is_array($status)) { $status = []; }
-        $status = array_merge([
+
+        // A stale process must never overwrite the status of a newer run.
+        $stored_run_id = isset($status['run_id']) ? (string) $status['run_id'] : '';
+        if (self::$run_id !== '' && $stored_run_id !== '' && !hash_equals($stored_run_id, self::$run_id)) {
+            return;
+        }
+
+        $status = array_merge($status, [
             'running' => true,
             'state' => 'running',
             'phase' => self::$current_phase,
@@ -58,8 +139,75 @@ class Causeway_Importer
             'percent' => self::compute_percent(),
             'started_at' => isset($status['started_at']) ? $status['started_at'] : time(),
             'updated_at' => time(),
+            'run_id' => self::$run_id !== '' ? self::$run_id : $stored_run_id,
+            'current_listing' => self::$current_listing,
         ], $data);
         update_option('causeway_import_status', $status, false);
+
+        // Keep the lock alive while this process is making progress.
+        if (!empty($status['running'])) {
+            set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
+        }
+    }
+
+    private static function begin_run(): void
+    {
+        $status = get_option('causeway_import_status', []);
+        if (!is_array($status)) { $status = []; }
+
+        $is_queued = ($status['state'] ?? '') === 'queued';
+        $last_update = (int) ($status['updated_at'] ?? 0);
+        $status_is_stale = $last_update > 0 && (time() - $last_update) > (35 * MINUTE_IN_SECONDS);
+        if (!$is_queued && !$status_is_stale && !empty($status['running']) && get_transient('causeway_import_lock') !== false) {
+            throw new RuntimeException('Another Causeway import is already running.');
+        }
+
+        $queued_run_id = $is_queued
+            ? (string) ($status['run_id'] ?? '')
+            : '';
+
+        self::$run_id = $queued_run_id !== ''
+            ? $queued_run_id
+            : (function_exists('wp_generate_uuid4') ? wp_generate_uuid4() : uniqid('causeway-', true));
+        self::$current_listing = [];
+
+        // Claim status ownership before any progress updates are written.
+        $status['run_id'] = self::$run_id;
+        update_option('causeway_import_status', $status, false);
+        set_transient('causeway_import_lock', time(), 30 * MINUTE_IN_SECONDS);
+    }
+
+    private static function release_import_lock(string $log_message = '🔓 Released import lock'): void
+    {
+        $status = get_option('causeway_import_status', []);
+        $stored_run_id = is_array($status) ? (string) ($status['run_id'] ?? '') : '';
+
+        // Only the process that owns the current status may release its lock.
+        if (self::$run_id === '' || $stored_run_id === '' || hash_equals($stored_run_id, self::$run_id)) {
+            delete_transient('causeway_import_lock');
+            self::log($log_message);
+        }
+    }
+
+    private static function failure_status(Throwable $error): array
+    {
+        $message = $error->getMessage();
+        if (!empty(self::$current_listing)) {
+            $title = (string) (self::$current_listing['title'] ?? 'unknown listing');
+            $causeway_id = (int) (self::$current_listing['causeway_id'] ?? 0);
+            $post_id = (int) (self::$current_listing['post_id'] ?? 0);
+            $message .= ' | Listing: ' . $title
+                . ' (Causeway ID: ' . ($causeway_id > 0 ? $causeway_id : 'n/a')
+                . ', WP ID: ' . ($post_id > 0 ? $post_id : 'n/a') . ')';
+        }
+
+        return [
+            'running' => false,
+            'state' => 'error',
+            'phase' => 'error',
+            'error_message' => $message,
+            'failed_listing' => self::$current_listing,
+        ];
     }
 
     private static function compute_percent(): float
@@ -94,20 +242,18 @@ class Causeway_Importer
         $last = error_get_last();
         $status = get_option('causeway_import_status', []);
         if (!is_array($status)) { $status = []; }
+        $stored_run_id = (string) ($status['run_id'] ?? '');
+        if (self::$run_id !== '' && $stored_run_id !== '' && !hash_equals($stored_run_id, self::$run_id)) {
+            return;
+        }
         $still_running = !empty($status['running']);
         if ($still_running) {
             $msg = $last ? ( ($last['message'] ?? 'Unknown error') . ' @ ' . ($last['file'] ?? '') . ':' . ($last['line'] ?? '') ) : 'Import terminated unexpectedly';
-            self::update_status([
-                'running' => false,
-                'state' => 'error',
-                'phase' => 'error',
-                'error_message' => $msg,
-            ]);
+            $error = new RuntimeException($msg);
+            self::update_status(self::failure_status($error));
+            self::track_import_failure($error);
             error_log('[Causeway] Import shutdown handler captured error: ' . $msg);
-            
-            // Release the import lock on error
-            delete_transient('causeway_import_lock');
-            self::log('🔓 Released import lock after error');
+            self::release_import_lock('🔓 Released import lock after error');
         }
     }
 
@@ -128,9 +274,19 @@ class Causeway_Importer
         self::log('start import');
         self::$total_listings = 0;
         self::$processed_listings = 0;
-        self::set_phase('bootstrap');
-        // Mark running immediately
-        self::update_status(['running' => true, 'state' => 'running', 'started_at' => time()]);
+        self::begin_run();
+        self::$current_phase = 'bootstrap';
+        self::update_status([
+            'running' => true,
+            'state' => 'running',
+            'phase' => 'bootstrap',
+            'started_at' => time(),
+            'error_message' => null,
+            'failed_listing' => [],
+            'cancel_requested' => false,
+        ]);
+        self::$start = microtime(true);
+        self::track_import_start('full');
         // Register a shutdown handler to flag errors on fatal termination
         register_shutdown_function([self::class, 'shutdown_handler']);
         
@@ -148,8 +304,6 @@ class Causeway_Importer
         if (!defined('CAUSEWAY_IMPORTING')) {
             define('CAUSEWAY_IMPORTING', true);
         }
-        self::$start = microtime(true);
-
         try {
             /* ── PERFORMANCE GUARD-RAILS ───────────────────────────── */
             if (function_exists('set_time_limit')) {
@@ -192,18 +346,15 @@ class Causeway_Importer
             self::import_listings();
 
             self::log('✅ Import Completed. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+            self::track_import_success();
             self::export_listings();
 
             self::set_phase('done');
             self::update_status(['running' => false, 'state' => 'done', 'percent' => 1.0]);
         } catch (Throwable $e) {
             self::log('❌ Import failed: ' . $e->getMessage());
-            self::update_status([
-                'running' => false,
-                'state' => 'error',
-                'phase' => 'error',
-                'error_message' => $e->getMessage(),
-            ]);
+            self::update_status(self::failure_status($e));
+            self::track_import_failure($e);
             throw $e;
         } finally {
             wp_defer_term_counting(false);
@@ -211,8 +362,7 @@ class Causeway_Importer
                 wp_suspend_cache_addition(false);
             }
 
-            delete_transient('causeway_import_lock');
-            self::log('🔓 Released import lock');
+            self::release_import_lock();
 
             if (is_string($orig_lang) && $orig_lang !== '') {
                 do_action('wpml_switch_language', $orig_lang);
@@ -223,10 +373,10 @@ class Causeway_Importer
     public static function export() {
         if (!self::is_exporter_enabled()) {
             self::log('⏸ Export skipped: exporter is disabled in settings.');
-            return;
+            return false;
         }
 
-        self::export_listings();
+        return self::export_listings();
     }
 
     // Run only listing imports (assumes taxonomies already exist)
@@ -249,8 +399,19 @@ class Causeway_Importer
         self::$total_listings = 0;
         self::$processed_listings = 0;
         self::$listing_map = [];
-        self::set_phase('bootstrap');
-        self::update_status(['running' => true, 'state' => 'running', 'started_at' => time()]);
+        self::begin_run();
+        self::$current_phase = 'bootstrap';
+        self::update_status([
+            'running' => true,
+            'state' => 'running',
+            'phase' => 'bootstrap',
+            'started_at' => time(),
+            'error_message' => null,
+            'failed_listing' => [],
+            'cancel_requested' => false,
+        ]);
+        self::$start = microtime(true);
+        self::track_import_start('listings');
         register_shutdown_function([self::class, 'shutdown_handler']);
 
         $baseURL = get_field('causeway_api_url', 'option');
@@ -266,8 +427,6 @@ class Causeway_Importer
             define('CAUSEWAY_IMPORTING', true);
         }
 
-        self::$start = microtime(true);
-
         try {
             if (function_exists('set_time_limit')) {
                 @set_time_limit(0);
@@ -280,6 +439,7 @@ class Causeway_Importer
             self::import_listings();
 
             self::log('✅ Listings-only import completed @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+            self::track_import_success();
 
             // Keep behavior consistent with other import modes: best-effort export afterwards.
             self::export_listings();
@@ -287,12 +447,8 @@ class Causeway_Importer
             self::set_phase('done');
             self::update_status(['running' => false, 'state' => 'done', 'percent' => 1.0]);
         } catch (Throwable $e) {
-            self::update_status([
-                'running' => false,
-                'state' => 'error',
-                'phase' => 'error',
-                'error_message' => $e->getMessage(),
-            ]);
+            self::update_status(self::failure_status($e));
+            self::track_import_failure($e);
             throw $e;
         } finally {
             wp_defer_term_counting(false);
@@ -300,9 +456,7 @@ class Causeway_Importer
                 wp_suspend_cache_addition(false);
             }
 
-            // Release the import lock
-            delete_transient('causeway_import_lock');
-            self::log('🔓 Released import lock');
+            self::release_import_lock();
 
             // Restore language (best-effort)
             if (is_string($orig_lang) && $orig_lang !== '') {
@@ -330,8 +484,19 @@ class Causeway_Importer
 
         self::$total_listings = 0;
         self::$processed_listings = 0;
-        self::set_phase('bootstrap');
-        self::update_status(['running' => true, 'state' => 'running']);
+        self::begin_run();
+        self::$current_phase = 'bootstrap';
+        self::update_status([
+            'running' => true,
+            'state' => 'running',
+            'phase' => 'bootstrap',
+            'started_at' => time(),
+            'error_message' => null,
+            'failed_listing' => [],
+            'cancel_requested' => false,
+        ]);
+        self::$start = microtime(true);
+        self::track_import_start('taxonomies');
         register_shutdown_function([self::class, 'shutdown_handler']);
 
         $baseURL = get_field('causeway_api_url', 'option');
@@ -346,8 +511,6 @@ class Causeway_Importer
         if (!defined('CAUSEWAY_IMPORTING')) {
             define('CAUSEWAY_IMPORTING', true);
         }
-
-        self::$start = microtime(true);
 
         try {
             if (function_exists('set_time_limit')) {
@@ -387,6 +550,7 @@ class Causeway_Importer
             }
 
             self::log('✅ Taxonomy import completed @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+            self::track_import_success();
 
             self::set_phase('exporting');
             self::export_listings();
@@ -394,12 +558,8 @@ class Causeway_Importer
             self::set_phase('done');
             self::update_status(['running' => false, 'state' => 'done', 'percent' => 1.0]);
         } catch (Throwable $e) {
-            self::update_status([
-                'running' => false,
-                'state' => 'error',
-                'phase' => 'error',
-                'error_message' => $e->getMessage(),
-            ]);
+            self::update_status(self::failure_status($e));
+            self::track_import_failure($e);
             throw $e;
         } finally {
             wp_defer_term_counting(false);
@@ -407,9 +567,7 @@ class Causeway_Importer
                 wp_suspend_cache_addition(false);
             }
 
-            // Release the import lock
-            delete_transient('causeway_import_lock');
-            self::log('🔓 Released import lock');
+            self::release_import_lock();
 
             // Restore language (best-effort)
             if (is_string($orig_lang) && $orig_lang !== '') {
@@ -1349,6 +1507,12 @@ class Causeway_Importer
             $causeway_id = $item['id'] ?? null;
             $post_status = strtolower($item['status'] ?? '') === 'published' ? 'publish' : 'draft';
             $post_id = false;
+            self::$current_listing = [
+                'title' => (string) $post_title,
+                'slug' => (string) $slug,
+                'causeway_id' => (int) $causeway_id,
+                'post_id' => 0,
+            ];
 
             if (!$post_title || !$slug || !$causeway_id || $post_status !== 'publish') {
                 self::log("Incorrect required information or unpublished");
@@ -1472,6 +1636,7 @@ class Causeway_Importer
                 continue;
             }
 
+            self::$current_listing['post_id'] = (int) $post_id;
             self::$listing_map[$slug] = $post_id;
 
 
@@ -1589,6 +1754,7 @@ class Causeway_Importer
             }
         }
 
+        self::$current_listing = [];
         self::log("Assigning related listings...");
         // TODO matt does not need to send the entire related listing object, just the slug OR ID
         foreach ($listings as $item) {
@@ -1824,16 +1990,30 @@ class Causeway_Importer
         wp_set_object_terms($post_id, $area_ids,      'listing-areas',       false);
     }
 
-    public static function export_listings()
+    public static function export_listings(): bool
     {
+        self::update_tracking([
+            'last_export_requested_at' => time(),
+            'last_export_status' => 'checking',
+            'last_export_error' => null,
+        ]);
+
         if (!self::is_exporter_enabled()) {
             self::log('⏸ Export notification skipped: exporter is disabled in settings.');
-            return;
+            self::update_tracking([
+                'last_export_status' => 'skipped',
+                'last_export_error' => 'Exporter is disabled in settings.',
+            ]);
+            return false;
         }
 
         if (!get_field('is_headless', 'option')) {
             self::log('Skipping export notification: site not configured as headless');
-            return;
+            self::update_tracking([
+                'last_export_status' => 'skipped',
+                'last_export_error' => 'Site is not configured as headless.',
+            ]);
+            return false;
         }
         self::log("Start Export");
         // Notify public site to re-fetch causeway data
@@ -1842,26 +2022,54 @@ class Causeway_Importer
 
         if (!$public_url || !$secret) {
             self::log('Skipping export notification: Missing public URL or secret');
-            return;
+            self::update_tracking([
+                'last_export_status' => 'skipped',
+                'last_export_error' => 'Missing public URL or API secret.',
+            ]);
+            return false;
         }
 
         if ($public_url) {
             $endpoint = trailingslashit($public_url) . 'api/fetch-causeway';
-
-            $response = wp_remote_post($endpoint, [
-                'timeout' => 1200,
-                'connect_timeout' => 30,
-                'headers'         => [
-                    'Content-Type' => 'application/json',
-                    'x-causeway-secret' => $secret,
-                ],
-                'body' => json_encode([
-                    'trigger' => 'listings_updated',
-                ]),
+            $export_start = microtime(true);
+            self::update_tracking([
+                'last_export_started_at' => time(),
+                'last_export_status' => 'running',
+                'last_export_endpoint' => $endpoint,
+                'last_export_http_code' => null,
+                'last_export_duration_seconds' => null,
+                'last_export_error' => null,
             ]);
+
+            try {
+                $response = wp_remote_post($endpoint, [
+                    'timeout' => 1200,
+                    'connect_timeout' => 30,
+                    'headers'         => [
+                        'Content-Type' => 'application/json',
+                        'x-causeway-secret' => $secret,
+                    ],
+                    'body' => json_encode([
+                        'trigger' => 'listings_updated',
+                    ]),
+                ]);
+            } catch (Throwable $e) {
+                self::log('❌ Failed to notify public site (' . $e->getMessage() . '). ' . $endpoint);
+                self::update_tracking([
+                    'last_export_failed_at' => time(),
+                    'last_export_status' => 'failed',
+                    'last_export_endpoint' => $endpoint,
+                    'last_export_http_code' => null,
+                    'last_export_duration_seconds' => round(microtime(true) - $export_start, 2),
+                    'last_export_error' => $e->getMessage(),
+                ]);
+                do_action('causeway_exporter_completed', false, $endpoint);
+                return false;
+            }
 
             $response_code = is_wp_error($response) ? 0 : (int) wp_remote_retrieve_response_code($response);
             $export_success = !is_wp_error($response) && $response_code >= 200 && $response_code < 300;
+            $reason = null;
 
             if (!$export_success) {
                 $reason = is_wp_error($response)
@@ -1872,6 +2080,20 @@ class Causeway_Importer
                 self::log('✅ Public site received data at ' . $endpoint . ' (HTTP ' . $response_code . ')');
             }
 
+            $tracking = [
+                'last_export_status' => $export_success ? 'success' : 'failed',
+                'last_export_endpoint' => $endpoint,
+                'last_export_http_code' => $response_code ?: null,
+                'last_export_duration_seconds' => round(microtime(true) - $export_start, 2),
+                'last_export_error' => $reason,
+            ];
+            if ($export_success) {
+                $tracking['last_export_succeeded_at'] = time();
+            } else {
+                $tracking['last_export_failed_at'] = time();
+            }
+            self::update_tracking($tracking);
+
             /**
              * Fires when Causeway export notification request completes.
              *
@@ -1880,9 +2102,10 @@ class Causeway_Importer
              */
             do_action('causeway_exporter_completed', $export_success, $endpoint);
 
-            return;
+            return $export_success;
         } else {
             self::log("❌ Public URL not set. Cannot notify.");
+            return false;
         }
     }
 
@@ -2386,23 +2609,54 @@ class Causeway_Importer
     private static function maybe_trigger_wpml_translation_refresh(int $post_id, array $translation_payload): void
     {
         $meta_key = '_causeway_translation_fingerprint';
+        $state_key = '_causeway_translation_state';
+        $pending_key = '_causeway_translation_pending_fingerprint';
+        $error_key = '_causeway_translation_error';
         $current_fingerprint = self::build_translation_fingerprint($translation_payload);
         $previous_fingerprint = (string) get_post_meta($post_id, $meta_key, true);
+        $previous_state = (string) get_post_meta($post_id, $state_key, true);
 
-        if ($previous_fingerprint !== '' && hash_equals($previous_fingerprint, $current_fingerprint)) {
+        if (
+            $previous_fingerprint !== ''
+            && hash_equals($previous_fingerprint, $current_fingerprint)
+            && ($previous_state === '' || $previous_state === 'completed')
+        ) {
             self::log('🌐 WPML translation skipped (no translatable changes) for listing ID: ' . $post_id);
             return;
         }
 
-        update_post_meta($post_id, $meta_key, $current_fingerprint);
-
         if ($previous_fingerprint === '') {
-            self::log('🌐 WPML translation fingerprint initialized for listing ID: ' . $post_id);
+            self::log('🌐 WPML translation refresh initialized for listing ID: ' . $post_id);
         } else {
-            self::log('🌐 WPML translation fingerprint changed for listing ID: ' . $post_id);
+            self::log('🌐 WPML translation refresh required for listing ID: ' . $post_id);
         }
 
-        self::trigger_wpml_translation_refresh($post_id);
+        update_post_meta($post_id, $pending_key, $current_fingerprint);
+        update_post_meta($post_id, $state_key, 'pending');
+        delete_post_meta($post_id, $error_key);
+
+        try {
+            $completed = self::trigger_wpml_translation_refresh($post_id);
+            if (!$completed) {
+                self::log('⚠️ WPML translation refresh deferred for listing ID: ' . $post_id);
+                return;
+            }
+
+            // Only a completed refresh may suppress future retries.
+            update_post_meta($post_id, $meta_key, $current_fingerprint);
+            update_post_meta($post_id, $state_key, 'completed');
+            delete_post_meta($post_id, $pending_key);
+            delete_post_meta($post_id, $error_key);
+        } catch (Throwable $e) {
+            update_post_meta($post_id, $state_key, 'failed');
+            update_post_meta($post_id, $error_key, $e->getMessage());
+            self::log('❌ WPML translation refresh failed for listing ID ' . $post_id . ': ' . $e->getMessage());
+            throw new RuntimeException(
+                'WPML translation refresh failed for listing ID ' . $post_id . ': ' . $e->getMessage(),
+                0,
+                $e
+            );
+        }
     }
 
     private static function build_translation_fingerprint(array $payload): string
@@ -2480,83 +2734,102 @@ class Causeway_Importer
      * Create WPML translation jobs for imported source listings so auto-translation can run.
      * This mirrors the behavior of clicking "Edit translation" in WPML, but runs during imports.
      */
-    private static function trigger_wpml_translation_refresh(int $post_id): void
+    private static function trigger_wpml_translation_refresh(int $post_id): bool
     {
-        if ($post_id <= 0 || !has_filter('wpml_default_language')) {
-            self::log('⚠️ WPML integration skipped: default language filter missing or invalid post ID for listing ID: ' . $post_id);
-            return;
+        if ($post_id <= 0) {
+            throw new InvalidArgumentException('Invalid listing ID supplied to WPML refresh.');
+        }
+
+        if (!has_filter('wpml_default_language') || !has_filter('wpml_element_language_details')) {
+            self::log('⚠️ WPML integration unavailable; translation refresh remains pending for listing ID: ' . $post_id);
+            return false;
         }
 
         $post = get_post($post_id);
         if (!$post || $post->post_type !== 'listing') {
-            self::log('⚠️ WPML integration skipped: post not found or not a listing for post ID: ' . $post_id);
-            return;
+            throw new RuntimeException('Post not found or not a listing for post ID ' . $post_id . '.');
         }
 
-        // Only trigger from the source/default language post.
         $default_lang = apply_filters('wpml_default_language', null);
-        $post_lang = apply_filters('wpml_element_language_code', null, [
-            'element_id' => $post_id,
-            'element_type' => 'post_' . $post->post_type,
-        ]);
-        if (is_string($default_lang) && $default_lang !== '' && is_string($post_lang) && $post_lang !== '' && $post_lang !== $default_lang) {
-            self::log('⚠️ WPML integration skipped: post language ' . $post_lang . ' is not default language ' . $default_lang . ' for listing ID: ' . $post_id);
-            return;
+        if (!is_string($default_lang) || $default_lang === '') {
+            throw new RuntimeException('WPML default language is unavailable.');
         }
 
-        // Let WPML's automatic translation listeners run when available.
-        do_action('wpml_after_save_post', $post_id);
+        $language_details = apply_filters('wpml_element_language_details', null, [
+            'element_id' => $post_id,
+            'element_type' => $post->post_type,
+        ]);
 
-        // Fallback: explicitly create local WPML jobs per target language.
+        $trid = is_object($language_details) ? (int) ($language_details->trid ?? 0) : 0;
+        $post_lang = is_object($language_details) ? (string) ($language_details->language_code ?? '') : '';
+        $source_lang = is_object($language_details) ? (string) ($language_details->source_language_code ?? '') : '';
+
+        if ($trid <= 0 || $post_lang === '') {
+            throw new RuntimeException('WPML translation-group metadata is missing for listing ID ' . $post_id . '.');
+        }
+        if ($post_lang !== $default_lang || $source_lang !== '') {
+            throw new RuntimeException(
+                'Listing ID ' . $post_id . ' is not the WPML source in default language ' . $default_lang
+                . ' (language=' . $post_lang . ', source=' . ($source_lang !== '' ? $source_lang : 'none') . ').'
+            );
+        }
+
+        // wpml_after_save_post is an internal WPML lifecycle hook. WPML emits it during
+        // wp_insert_post()/wp_update_post() with the real post ID, trid and language data.
+        // Emitting it manually here duplicates the lifecycle and breaks listeners such as ACFML.
+
+        // Refresh Translation Management state after the importer has saved all ACF fields.
+        if (has_action('wpml_tm_save_post')) {
+            do_action('wpml_tm_save_post', $post_id, $post, false);
+        }
+
         global $wpml_translation_job_factory;
         if (!is_object($wpml_translation_job_factory) || !method_exists($wpml_translation_job_factory, 'create_local_post_job')) {
-            self::log('⚠️ WPML translation job factory unavailable; skipping job creation for listing ID: ' . $post_id);
-            return;
+            throw new RuntimeException('WPML translation job factory is unavailable.');
         }
 
         $langs = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
         if (!is_array($langs) || empty($langs)) {
-            self::log('⚠️ WPML active languages unavailable; skipping job creation for listing ID: ' . $post_id);
-            return;
+            throw new RuntimeException('WPML active languages are unavailable.');
+        }
+
+        $target_languages = [];
+        foreach (array_keys($langs) as $lang_code) {
+            if (is_string($lang_code) && $lang_code !== '' && $lang_code !== $default_lang) {
+                $target_languages[] = $lang_code;
+            }
+        }
+        if (empty($target_languages)) {
+            self::log('🌐 WPML has no target languages; translation refresh completed for listing ID: ' . $post_id);
+            return true;
         }
 
         $created = 0;
-        foreach ($langs as $lang_code => $lang_data) {
-            if (!is_string($lang_code) || $lang_code === '' || $lang_code === $default_lang) {
-                continue;
+        foreach ($target_languages as $lang_code) {
+            $job_id = $wpml_translation_job_factory->create_local_post_job($post_id, $lang_code);
+            if (!$job_id) {
+                throw new RuntimeException('WPML returned no translation job for language ' . $lang_code . '.');
             }
 
-            try {
-                $job_id = $wpml_translation_job_factory->create_local_post_job($post_id, $lang_code);
-                if ($job_id) {
-                    $created++;
-                    self::log('🌐 WPML job created for listing ID ' . $post_id . ' [' . $lang_code . '] job ID: ' . $job_id);
+            $created++;
+            self::log('🌐 WPML job created for listing ID ' . $post_id . ' [' . $lang_code . '] job ID: ' . $job_id);
 
-                    if (class_exists('\\WPML\\TM\\API\\Jobs')) {
-                        $job_meta = \WPML\TM\API\Jobs::get((int) $job_id);
-                        if (is_object($job_meta)) {
-                            $automatic = !empty($job_meta->automatic) ? 1 : 0;
-                            $status = isset($job_meta->status) ? (string) $job_meta->status : 'unknown';
-                            self::log('🌐 WPML job meta for listing ID ' . $post_id . ' [' . $lang_code . '] job ID ' . $job_id . ': automatic=' . $automatic . ', status=' . $status);
-                        }
-                    }
-                } else {
-                    self::log('⚠️ WPML job factory returned no job for listing ID ' . $post_id . ' [' . $lang_code . ']');
+            if (class_exists('\\WPML\\TM\\API\\Jobs')) {
+                $job_meta = \WPML\TM\API\Jobs::get((int) $job_id);
+                if (!is_object($job_meta)) {
+                    throw new RuntimeException('WPML translation job ' . $job_id . ' could not be verified.');
                 }
-            } catch (\Throwable $e) {
-                self::log('❌ WPML job creation failed for listing ' . $post_id . ' [' . $lang_code . ']: ' . $e->getMessage());
+                $automatic = !empty($job_meta->automatic) ? 1 : 0;
+                $status = isset($job_meta->status) ? (string) $job_meta->status : 'unknown';
+                self::log('🌐 WPML job meta for listing ID ' . $post_id . ' [' . $lang_code . '] job ID ' . $job_id . ': automatic=' . $automatic . ', status=' . $status);
             }
         }
 
-        if ($created > 0) {
-            self::log('🌐 WPML translation jobs created for listing ID ' . $post_id . ': ' . $created);
-        } else {
-            self::log('⚠️ WPML created zero translation jobs for listing ID: ' . $post_id);
+        if ($created !== count($target_languages)) {
+            throw new RuntimeException('WPML did not create all requested translation jobs.');
         }
 
-        // Keep status metadata fresh for TM dashboard states.
-        if (has_action('wpml_tm_save_post')) {
-            do_action('wpml_tm_save_post', $post_id, $post, false);
-        }
+        self::log('🌐 WPML translation jobs created for listing ID ' . $post_id . ': ' . $created);
+        return true;
     }
 }

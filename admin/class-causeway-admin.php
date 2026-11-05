@@ -41,6 +41,86 @@ class Causeway_Admin {
         );
     }
 
+    private static function render_activity_panel(): void {
+        $tracking = get_option('causeway_import_tracking', []);
+        if (!is_array($tracking)) {
+            $tracking = [];
+        }
+
+        $format_time = static function ($timestamp): string {
+            if (empty($timestamp)) {
+                return '—';
+            }
+
+            return wp_date(
+                get_option('date_format') . ' ' . get_option('time_format'),
+                (int) $timestamp
+            );
+        };
+        $format_duration = static function ($seconds): string {
+            return is_numeric($seconds) ? number_format_i18n((float) $seconds, 2) . ' seconds' : '—';
+        };
+        $format_status = static function ($status): string {
+            $status = (string) $status;
+            if ($status === '') {
+                return '—';
+            }
+
+            $colors = [
+                'success' => '#008a20',
+                'failed' => '#b32d2e',
+                'running' => '#2271b1',
+                'checking' => '#996800',
+                'skipped' => '#646970',
+            ];
+            $color = $colors[$status] ?? '#646970';
+            return '<strong style="color:' . esc_attr($color) . ';">' . esc_html(ucfirst($status)) . '</strong>';
+        };
+
+        $processed = isset($tracking['last_import_processed']) ? (int) $tracking['last_import_processed'] : null;
+        $total = isset($tracking['last_import_total']) ? (int) $tracking['last_import_total'] : null;
+        $listing_count = ($processed !== null && $total !== null && ($processed > 0 || $total > 0))
+            ? number_format_i18n($processed) . ' / ' . number_format_i18n($total)
+            : '—';
+        ?>
+        <div class="causeway-activity" style="max-width:1000px;margin:18px 0 22px;">
+            <h2 style="margin-bottom:10px;">Import &amp; Export Activity</h2>
+            <div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;">
+                <table class="widefat striped" style="width:480px;max-width:100%;">
+                    <thead><tr><th colspan="2">Imports</th></tr></thead>
+                    <tbody>
+                        <tr><td>Last started</td><td><?php echo esc_html($format_time($tracking['last_import_started_at'] ?? null)); ?></td></tr>
+                        <tr><td>Last successful</td><td><?php echo esc_html($format_time($tracking['last_import_succeeded_at'] ?? null)); ?></td></tr>
+                        <tr><td>Last failed</td><td><?php echo esc_html($format_time($tracking['last_import_failed_at'] ?? null)); ?></td></tr>
+                        <tr><td>Latest result</td><td><?php echo $format_status($tracking['last_import_status'] ?? ''); ?></td></tr>
+                        <tr><td>Mode</td><td><?php echo esc_html(ucfirst((string) ($tracking['last_import_mode'] ?? '—'))); ?></td></tr>
+                        <tr><td>Duration</td><td><?php echo esc_html($format_duration($tracking['last_import_duration_seconds'] ?? null)); ?></td></tr>
+                        <tr><td>Listings processed</td><td><?php echo esc_html($listing_count); ?></td></tr>
+                    </tbody>
+                </table>
+                <table class="widefat striped" style="width:480px;max-width:100%;">
+                    <thead><tr><th colspan="2">Exports</th></tr></thead>
+                    <tbody>
+                        <tr><td>Last requested</td><td><?php echo esc_html($format_time($tracking['last_export_requested_at'] ?? null)); ?></td></tr>
+                        <tr><td>Last attempt</td><td><?php echo esc_html($format_time($tracking['last_export_started_at'] ?? null)); ?></td></tr>
+                        <tr><td>Last successful</td><td><?php echo esc_html($format_time($tracking['last_export_succeeded_at'] ?? null)); ?></td></tr>
+                        <tr><td>Last failed</td><td><?php echo esc_html($format_time($tracking['last_export_failed_at'] ?? null)); ?></td></tr>
+                        <tr><td>Latest result</td><td><?php echo $format_status($tracking['last_export_status'] ?? ''); ?></td></tr>
+                        <tr><td>Duration</td><td><?php echo esc_html($format_duration($tracking['last_export_duration_seconds'] ?? null)); ?></td></tr>
+                        <tr><td>HTTP status</td><td><?php echo esc_html(!empty($tracking['last_export_http_code']) ? (string) $tracking['last_export_http_code'] : '—'); ?></td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <?php if (!empty($tracking['last_import_error'])) : ?>
+                <p style="color:#b32d2e;margin:10px 0 0;"><strong>Latest import error:</strong> <?php echo esc_html($tracking['last_import_error']); ?></p>
+            <?php endif; ?>
+            <?php if (!empty($tracking['last_export_error'])) : ?>
+                <p style="color:#b32d2e;margin:6px 0 0;"><strong>Latest export note:</strong> <?php echo esc_html($tracking['last_export_error']); ?></p>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
     public static function render_import_page() {
         error_log('show page');
         $is_headless = (bool) get_field('is_headless', 'option');
@@ -69,8 +149,11 @@ class Causeway_Admin {
 <div class="wrap">
     <h1>Causeway Data Importer <span style='font-size: 1.1rem;'>(Causeway to WordPress)</span></h1>
     <p>This tool will manually import all listings and taxonomy data from the external Causeway API into your WordPress site.</p>
+    <?php self::render_activity_panel(); ?>
     <?php
-    $status = get_option('causeway_import_status', []);
+    $status = function_exists('causeway_get_import_status')
+        ? causeway_get_import_status()
+        : get_option('causeway_import_status', []);
     $running = is_array($status) && !empty($status['running']);
     $percent = isset($status['percent']) ? floatval($status['percent']) : 0;
     $processed = intval($status['processed'] ?? 0);
@@ -221,10 +304,14 @@ class Causeway_Admin {
         if (isset($_GET['exported']) && $_GET['exported'] === '1') {
             echo '<div class="notice notice-success is-dismissible"><p>✅ Listings exported successfully.</p></div>';
         }
+        if (isset($_GET['export_failed']) && $_GET['export_failed'] === '1') {
+            echo '<div class="notice notice-error is-dismissible"><p>❌ Export notification failed or was skipped. See the activity details below.</p></div>';
+        }
         ?>
 <div class="wrap">
     <h1>Causeway Data Exporter <span style='font-size: 1.1rem;'>(Here to Public Website)</span></h1>
     <p>This tool will manually export all listings and taxonomy data from this website into the public headless site.</p>
+    <?php self::render_activity_panel(); ?>
     <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="margin-top: 20px;">
         <?php wp_nonce_field('causeway_export_action', 'causeway_export_nonce'); ?>
         <input type="hidden" name="action" value="causeway_manual_export">

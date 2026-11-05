@@ -4,7 +4,7 @@
 /**
  * Plugin Name: Causeway Listings Importer
  * Description: Imports listings and taxonomies from Causeway API into WordPress with WPML and ACF integration.
- * Version: 1.1.19
+ * Version: 1.1.20
  * Author: NovaStream
  * Update URI: https://github.com/NovaStreamCA/causeway5-importer
  * 
@@ -121,6 +121,56 @@ function causeway_register_taxonomies()
 }
 add_action('init', 'causeway_register_taxonomies');
 
+function causeway_new_import_run_id(): string
+{
+    return function_exists('wp_generate_uuid4')
+        ? wp_generate_uuid4()
+        : uniqid('causeway-', true);
+}
+
+/**
+ * Return importer status and recover runs that can no longer have a live lock.
+ */
+function causeway_get_import_status(): array
+{
+    $status = get_option('causeway_import_status', []);
+    if (!is_array($status)) { $status = []; }
+
+    $defaults = [
+        'running' => false,
+        'phase' => 'idle',
+        'processed' => 0,
+        'total' => 0,
+        'percent' => 0,
+        'state' => 'idle',
+        'started_at' => null,
+        'updated_at' => null,
+        'error_message' => null,
+        'run_id' => '',
+        'current_listing' => [],
+        'failed_listing' => [],
+    ];
+    $status = array_merge($defaults, $status);
+
+    if (!empty($status['running'])) {
+        $last_update = (int) ($status['updated_at'] ?: $status['started_at']);
+        $stale_after = (int) apply_filters('causeway_abandoned_import_seconds', 35 * MINUTE_IN_SECONDS);
+        $lock_exists = get_transient('causeway_import_lock') !== false;
+
+        if ($last_update > 0 && (time() - $last_update) > $stale_after && !$lock_exists) {
+            $status['running'] = false;
+            $status['state'] = 'error';
+            $status['phase'] = 'error';
+            $status['error_message'] = 'Import stopped reporting progress and no active process lock remains. The run was marked abandoned.';
+            $status['updated_at'] = time();
+            update_option('causeway_import_status', $status, false);
+            error_log('[Causeway] Recovered abandoned import status for run ' . ($status['run_id'] ?: 'unknown'));
+        }
+    }
+
+    return $status;
+}
+
 // Allow modern image formats to be uploaded/sideloaded (AVIF/HEIC/HEIF)
 add_filter('upload_mimes', function ($mimes) {
     $mimes['avif'] = 'image/avif';
@@ -179,6 +229,7 @@ add_action('admin_post_causeway_manual_import', function () {
         'state' => 'queued',
         'started_at' => time(),
         'updated_at' => time(),
+        'run_id' => causeway_new_import_run_id(),
     ];
     update_option('causeway_import_status', $status, false);
 
@@ -254,6 +305,7 @@ add_action('admin_post_causeway_manual_import_taxonomies', function () {
         'state' => 'queued',
         'started_at' => time(),
         'updated_at' => time(),
+        'run_id' => causeway_new_import_run_id(),
     ];
     update_option('causeway_import_status', $status, false);
 
@@ -326,6 +378,7 @@ add_action('admin_post_causeway_manual_import_listings', function () {
         'state' => 'queued',
         'started_at' => time(),
         'updated_at' => time(),
+        'run_id' => causeway_new_import_run_id(),
     ];
     update_option('causeway_import_status', $status, false);
 
@@ -360,21 +413,7 @@ add_action('wp_ajax_causeway_import_status', function () {
     if (!current_user_can('manage_options')) {
         wp_send_json_error(['message' => 'Unauthorized'], 403);
     }
-    $status = get_option('causeway_import_status', []);
-    if (!is_array($status)) { $status = []; }
-    $defaults = [
-        'running' => false,
-        'phase' => 'idle',
-        'processed' => 0,
-        'total' => 0,
-        'percent' => 0,
-        'state' => 'idle',
-        'started_at' => null,
-        'updated_at' => null,
-        'error_message' => null,
-    ];
-    $status = array_merge($defaults, $status);
-    wp_send_json_success($status);
+    wp_send_json_success(causeway_get_import_status());
 });
 
 add_action('admin_post_causeway_manual_export', function () {
@@ -391,11 +430,12 @@ add_action('admin_post_causeway_manual_export', function () {
         wp_die('Export is disabled: this site is not configured as headless.');
     }
 
-    if (class_exists('Causeway_Importer')) {
-        Causeway_Importer::export_listings();
-    }
+    $export_success = class_exists('Causeway_Importer')
+        ? Causeway_Importer::export_listings()
+        : false;
 
-    wp_redirect(add_query_arg('exported', '1', wp_get_referer()));
+    $notice = $export_success ? 'exported' : 'export_failed';
+    wp_redirect(add_query_arg($notice, '1', wp_get_referer()));
     exit;
 });
 
@@ -418,6 +458,9 @@ add_action('admin_post_causeway_manual_import_reset', function () {
         'updated_at' => time(),
         'error_message' => null,
         'cancel_requested' => false,
+        'run_id' => '',
+        'current_listing' => [],
+        'failed_listing' => [],
     ];
     update_option('causeway_import_status', $defaults, false);
     
@@ -605,16 +648,18 @@ function run_causeway_import_export()
             error_log('[Causeway] Import failed: ' . $e->getMessage());
             $status = get_option('causeway_import_status', []);
             if (!is_array($status)) { $status = []; }
-            $status['running'] = false;
-            $status['phase'] = 'error';
-            $status['state'] = 'error';
-            $status['error_message'] = $e->getMessage();
-            $status['updated_at'] = time();
-            update_option('causeway_import_status', $status, false);
-            
-            // Release lock on error
-            delete_transient('causeway_import_lock');
-            error_log('[Causeway] Released import lock after error');
+            // The importer normally records richer context and releases its own lock.
+            // Only provide runner-level recovery if it failed before doing so.
+            if (($status['state'] ?? '') !== 'error') {
+                $status['running'] = false;
+                $status['phase'] = 'error';
+                $status['state'] = 'error';
+                $status['error_message'] = $e->getMessage();
+                $status['updated_at'] = time();
+                update_option('causeway_import_status', $status, false);
+                delete_transient('causeway_import_lock');
+                error_log('[Causeway] Released import lock after runner-level error');
+            }
         }
     }
 }
@@ -648,14 +693,16 @@ function run_causeway_taxonomy_import()
             error_log('[Causeway] Taxonomy-only import failed: ' . $e->getMessage());
             $status = get_option('causeway_import_status', []);
             if (!is_array($status)) { $status = []; }
-            $status['running'] = false;
-            $status['phase'] = 'error';
-            $status['state'] = 'error';
-            $status['error_message'] = $e->getMessage();
-            $status['updated_at'] = time();
-            update_option('causeway_import_status', $status, false);
-            delete_transient('causeway_import_lock');
-            error_log('[Causeway] Released import lock after taxonomy-only error');
+            if (($status['state'] ?? '') !== 'error') {
+                $status['running'] = false;
+                $status['phase'] = 'error';
+                $status['state'] = 'error';
+                $status['error_message'] = $e->getMessage();
+                $status['updated_at'] = time();
+                update_option('causeway_import_status', $status, false);
+                delete_transient('causeway_import_lock');
+                error_log('[Causeway] Released import lock after taxonomy runner-level error');
+            }
         }
     }
 }
@@ -687,14 +734,16 @@ function run_causeway_listings_import()
             error_log('[Causeway] Listings-only import failed: ' . $e->getMessage());
             $status = get_option('causeway_import_status', []);
             if (!is_array($status)) { $status = []; }
-            $status['running'] = false;
-            $status['phase'] = 'error';
-            $status['state'] = 'error';
-            $status['error_message'] = $e->getMessage();
-            $status['updated_at'] = time();
-            update_option('causeway_import_status', $status, false);
-            delete_transient('causeway_import_lock');
-            error_log('[Causeway] Released import lock after listings-only error');
+            if (($status['state'] ?? '') !== 'error') {
+                $status['running'] = false;
+                $status['phase'] = 'error';
+                $status['state'] = 'error';
+                $status['error_message'] = $e->getMessage();
+                $status['updated_at'] = time();
+                update_option('causeway_import_status', $status, false);
+                delete_transient('causeway_import_lock');
+                error_log('[Causeway] Released import lock after listings runner-level error');
+            }
         }
     }
 }
@@ -1002,7 +1051,12 @@ if (defined('WP_CLI') && WP_CLI) {
             ini_set('memory_limit', '1G');
             set_time_limit(0);
 
-            Causeway_Importer::import();
+            try {
+                Causeway_Importer::import();
+            } catch (Throwable $e) {
+                WP_CLI::error('Causeway import failed: ' . $e->getMessage());
+                return;
+            }
 
             $secs = number_format(microtime(true) - $start, 2);
             WP_CLI::success("Import finished in {$secs}s");
@@ -1028,7 +1082,12 @@ if (defined('WP_CLI') && WP_CLI) {
             ini_set('memory_limit', '1G');
             set_time_limit(0);
 
-            Causeway_Importer::import_taxonomies_only();
+            try {
+                Causeway_Importer::import_taxonomies_only();
+            } catch (Throwable $e) {
+                WP_CLI::error('Causeway taxonomy import failed: ' . $e->getMessage());
+                return;
+            }
 
             $secs = number_format(microtime(true) - $start, 2);
             WP_CLI::success("Taxonomy-only import finished in {$secs}s");
@@ -1054,10 +1113,44 @@ if (defined('WP_CLI') && WP_CLI) {
             ini_set('memory_limit', '1G');
             set_time_limit(0);
 
-            Causeway_Importer::import_listings_only();
+            try {
+                Causeway_Importer::import_listings_only();
+            } catch (Throwable $e) {
+                WP_CLI::error('Causeway listings import failed: ' . $e->getMessage());
+                return;
+            }
 
             $secs = number_format(microtime(true) - $start, 2);
             WP_CLI::success("Listings-only import finished in {$secs}s");
+        }
+
+        /**
+         * Clear Causeway's translation completion marker so a listing is retried.
+         *
+         * ## OPTIONS
+         *
+         * <post-id>
+         * : WordPress listing post ID.
+         *
+         * ## EXAMPLES
+         *
+         *     wp causeway reset_translation 180232
+         */
+        public function reset_translation($args)
+        {
+            $post_id = isset($args[0]) ? (int) $args[0] : 0;
+            $post = $post_id > 0 ? get_post($post_id) : null;
+            if (!$post || $post->post_type !== 'listing') {
+                WP_CLI::error('A valid listing post ID is required.');
+                return;
+            }
+
+            delete_post_meta($post_id, '_causeway_translation_fingerprint');
+            delete_post_meta($post_id, '_causeway_translation_state');
+            delete_post_meta($post_id, '_causeway_translation_pending_fingerprint');
+            delete_post_meta($post_id, '_causeway_translation_error');
+
+            WP_CLI::success('Translation retry enabled for listing ID ' . $post_id . '. Run the listings import to retry it.');
         }
     }
 
