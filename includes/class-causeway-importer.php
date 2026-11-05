@@ -150,67 +150,73 @@ class Causeway_Importer
         }
         self::$start = microtime(true);
 
-         /* ── PERFORMANCE GUARD-RAILS ───────────────────────────── */
-        if (function_exists('set_time_limit')) {
-            @set_time_limit(0);
-        }
-        if (function_exists('wp_suspend_cache_addition')) {
-            wp_suspend_cache_addition(true);
-        }
-        wp_defer_term_counting(true);           // no recounts on every insert
+        try {
+            /* ── PERFORMANCE GUARD-RAILS ───────────────────────────── */
+            if (function_exists('set_time_limit')) {
+                @set_time_limit(0);
+            }
+            if (function_exists('wp_suspend_cache_addition')) {
+                wp_suspend_cache_addition(true);
+            }
+            wp_defer_term_counting(true); // no recounts on every insert
 
-    // Preload and cache calls that would be used multiple times
-    self::set_phase('taxonomies');
-        self::$areas = self::fetch_remote('areas');
-        self::$communities = self::fetch_remote('communities');
-        self::$regions = self::fetch_remote('regions');
-        self::$counties = self::fetch_remote('counties');
+            // Preload and cache calls that would be used multiple times.
+            self::set_phase('taxonomies');
+            self::$areas = self::fetch_remote('areas');
+            self::$communities = self::fetch_remote('communities');
+            self::$regions = self::fetch_remote('regions');
+            self::$counties = self::fetch_remote('counties');
 
-        //Import Taxonomies
-        self::import_types();
-        self::import_categories();
-        self::import_amenities();
-        self::import_campaigns();
-        self::import_seasons();
-        self::import_terms('listing-counties', self::$counties);
+            // Import taxonomies.
+            self::import_types();
+            self::import_categories();
+            self::import_amenities();
+            self::import_campaigns();
+            self::import_seasons();
+            self::import_terms('listing-counties', self::$counties);
+            self::import_terms('listing-areas', self::$areas);
+            self::import_terms('listing-communities', self::$communities);
+            self::import_terms('listing-regions', self::$regions);
 
-        // Complex taxonomies
-        self::import_terms('listing-areas', self::$areas);
-        self::import_terms('listing-communities', self::$communities);
-        self::import_terms('listing-regions', self::$regions);
+            self::assign_area_communities();
+            self::assign_community_areas_and_regions();
+            self::assign_region_communities();
 
-        self::assign_area_communities();
-        self::assign_community_areas_and_regions();
-        self::assign_region_communities();
+            if (get_field('is_headless', 'option')) {
+                self::assign_area_slugs();
+                self::assign_category_slugs();
+            } else {
+                self::log('Skipping area/category slug assignments: site not headless');
+            }
 
-        // Only assign slugs when in headless mode
-        if (get_field('is_headless', 'option')) {
-            self::assign_area_slugs();
-            self::assign_category_slugs();
-        } else {
-            self::log('Skipping area/category slug assignments: site not headless');
-        }
+            self::import_listings();
 
-        self::import_listings();
+            self::log('✅ Import Completed. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+            self::export_listings();
 
-        self::log('✅ Import Completed. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+            self::set_phase('done');
+            self::update_status(['running' => false, 'state' => 'done', 'percent' => 1.0]);
+        } catch (Throwable $e) {
+            self::log('❌ Import failed: ' . $e->getMessage());
+            self::update_status([
+                'running' => false,
+                'state' => 'error',
+                'phase' => 'error',
+                'error_message' => $e->getMessage(),
+            ]);
+            throw $e;
+        } finally {
+            wp_defer_term_counting(false);
+            if (function_exists('wp_suspend_cache_addition')) {
+                wp_suspend_cache_addition(false);
+            }
 
-        self::export_listings();
+            delete_transient('causeway_import_lock');
+            self::log('🔓 Released import lock');
 
-        // Done
-    self::set_phase('done');
-    self::update_status(['running' => false, 'state' => 'done', 'percent' => 1.0]);
-
-        wp_defer_term_counting(false);
-        wp_suspend_cache_addition(false);
-        
-        // Release the import lock
-        delete_transient('causeway_import_lock');
-        self::log('🔓 Released import lock');
-
-        // Restore language (best-effort)
-        if (is_string($orig_lang) && $orig_lang !== '') {
-            do_action('wpml_switch_language', $orig_lang);
+            if (is_string($orig_lang) && $orig_lang !== '') {
+                do_action('wpml_switch_language', $orig_lang);
+            }
         }
     }
 
@@ -423,18 +429,24 @@ class Causeway_Importer
         );
 
         if (is_wp_error($response)) {
-            self::log('❌ WP Error (' . $endpoint . '): ' . $response->get_error_message());
-            return [];
+            throw new RuntimeException('Causeway request failed (' . $endpoint . '): ' . $response->get_error_message());
         }
 
-        $data = json_decode(wp_remote_retrieve_body($response), true);
-
-        if (is_wp_error($data)) {
-            self::log('❌ JSON Error (' . $endpoint . '): ' . $data->get_error_message());
-            return [];
+        $http_code = (int) wp_remote_retrieve_response_code($response);
+        if ($http_code < 200 || $http_code >= 300) {
+            throw new RuntimeException('Causeway request returned HTTP ' . $http_code . ' (' . $endpoint . ')');
         }
 
-        return is_array($data) ? $data : [];
+        $data = json_decode((string) wp_remote_retrieve_body($response), true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new RuntimeException('Causeway returned invalid JSON (' . $endpoint . '): ' . json_last_error_msg());
+        }
+
+        if (!is_array($data)) {
+            throw new RuntimeException('Causeway returned an unexpected response (' . $endpoint . ')');
+        }
+
+        return $data;
     }
 
     private static function import_types()
@@ -683,6 +695,7 @@ class Causeway_Importer
         self::log('Importing amenities...');
         $data = self::fetch_remote('amenities');
         $imported_ids = [];
+        $remote_ids = [];
         $total = is_array($data) ? count($data) : 0;
 
         self::log('✅ Received ' . $total . ' amenities from API. @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
@@ -691,24 +704,42 @@ class Causeway_Importer
             $causeway_id = $item['id'] ?? null;
             $type_id = $item['type']['id'] ?? null;
 
+            if ($causeway_id) {
+                $remote_ids[] = (int) $causeway_id;
+            }
             if (!$name || !$causeway_id) {
+                self::log('⚠️ Skipping amenity with missing name or ID: ' . wp_json_encode($item));
                 continue;
             }
 
             // Check if term already exists by causeway_id
             $existing = self::get_term_by_causeway_id($causeway_id, 'listings-amenities');
+            $base_slug = sanitize_title($name);
+            $slug = $base_slug;
+            $slug_collision = get_term_by('slug', $base_slug, 'listings-amenities');
+            if ($slug_collision && !is_wp_error($slug_collision)) {
+                $existing_term_id = $existing ? (int) $existing->term_id : 0;
+                if ((int) $slug_collision->term_id !== $existing_term_id) {
+                    $slug = $base_slug . '-' . (int) $causeway_id;
+                }
+            }
 
             if ($existing) {
                 $term_id = $existing->term_id;
-                wp_update_term($term_id, 'listings-amenities', [
+                $updated = wp_update_term($term_id, 'listings-amenities', [
                     'name' => $name,
-                    'slug' => sanitize_title($name),
+                    'slug' => $slug,
                 ]);
+                if (is_wp_error($updated)) {
+                    self::log('❌ Failed to update amenity ' . $name . ' [' . $causeway_id . ']: ' . $updated->get_error_message());
+                    continue;
+                }
             } else {
                 $term = wp_insert_term($name, 'listings-amenities', [
-                    'slug' => sanitize_title($name),
+                    'slug' => $slug,
                 ]);
                 if (is_wp_error($term)) {
+                    self::log('❌ Failed to insert amenity ' . $name . ' [' . $causeway_id . ']: ' . $term->get_error_message());
                     continue;
                 }
                 $term_id = $term['term_id'];
@@ -720,7 +751,7 @@ class Causeway_Importer
 
             // Update ACF fields
             update_field('causeway_id', $causeway_id, 'listings-amenities_' . $term_id);
-            update_field('amenity_icon', $item['icon'], 'listings-amenities_' . $term_id);
+            update_field('amenity_icon', $item['icon'] ?? null, 'listings-amenities_' . $term_id);
 
             // Set ACF relationship to type
             $type_term = self::get_term_by_causeway_id($type_id, 'listing-type');
@@ -728,13 +759,25 @@ class Causeway_Importer
                 update_field('listing_type', $type_term->term_id, 'listings-amenities_' . $term_id);
             }
 
+            // The cache may have been primed before this term was inserted.
+            if (!isset(self::$term_cache['listings-amenities']) || !is_array(self::$term_cache['listings-amenities'])) {
+                self::$term_cache['listings-amenities'] = [];
+            }
+            $term_object = get_term($term_id, 'listings-amenities');
+            if ($term_object && !is_wp_error($term_object)) {
+                self::$term_cache['listings-amenities'][(int) $causeway_id] = $term_object;
+            }
+
             $imported_ids[] = $causeway_id;
         }
 
         $import_count = is_array($imported_ids) ? count($imported_ids) : 0;
-        self::log('✅ Amenities Imported ' . $import_count . ' of ' . $total . ' @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
+        $amenity_result = $import_count === $total ? '✅' : '⚠️';
+        self::log($amenity_result . ' Amenities Imported ' . $import_count . ' of ' . $total . ' @ ' . round(microtime(true) - self::$start, 2) . ' seconds');
 
-        self::delete_old_terms('listings-amenities', $imported_ids);
+        // Base stale deletion on IDs returned by the API, not successful local writes.
+        // A transient WordPress write error must not delete a still-current amenity.
+        self::delete_old_terms('listings-amenities', $remote_ids);
     }
 
     private static function import_campaigns()
@@ -1153,6 +1196,8 @@ class Causeway_Importer
     {
         self::log('Importing listings..');
         $imported_ids = [];
+        $skipped_listing_slugs = [];
+        self::$listing_map = [];
 
         // Build base endpoint with status filter.
         // The API currently throws when search[]/compare[]/value[] are parsed as arrays,
@@ -1194,9 +1239,7 @@ class Causeway_Importer
         // ]);
 
         if (is_wp_error($response)) {
-            self::log('❌ Failed to fetch listings');
-            // self::log($response);
-            return;
+            throw new RuntimeException('Failed to fetch Causeway listings: ' . $response->get_error_message());
         }
 
         // Log response fingerprint + cache headers to help detect intermediary caching.
@@ -1235,11 +1278,14 @@ class Causeway_Importer
             self::log('🌐 Listings response headers: ' . wp_json_encode($header_dump));
         }
 
+        if ($http_code < 200 || $http_code >= 300) {
+            throw new RuntimeException('Causeway listings request returned HTTP ' . $http_code);
+        }
+
         $listings = json_decode($body, true);
         if (!is_array($listings)) {
-            self::log('❌ Invalid listings data');
-            // self::log($listings);
-            return;
+            $json_error = json_last_error() === JSON_ERROR_NONE ? 'unexpected response shape' : json_last_error_msg();
+            throw new RuntimeException('Causeway returned invalid listings data: ' . $json_error);
         }
 
         // Safety net: if filters were provided, enforce client-side filtering as well
@@ -1316,6 +1362,53 @@ class Causeway_Importer
             }
             $seen_causeway_ids[(int)$causeway_id] = true;
 
+            // Build occurrences before writing the post. Expired events should never be
+            // created or fully updated only to be deleted at the end of the same import.
+            $dates = [];
+            foreach ($item['dates'] ?? [] as $date) {
+                $dates[] = [
+                    'start_at' => $date['start_at'] ?? '',
+                    'end_at'   => $date['end_at'] ?? '',
+                    'rrule'    => $date['rrule'] ?? '',
+                ];
+            }
+
+            $is_event_type = false;
+            foreach (($item['types'] ?? []) as $type_entry) {
+                if ((int) ($type_entry['id'] ?? 0) === 3) {
+                    $is_event_type = true;
+                    break;
+                }
+            }
+
+            [$rows, $next] = self::build_occurrences_for_acf($dates, $is_event_type);
+            if ($is_event_type && !empty($rows) && empty($next)) {
+                $last_row = end($rows);
+                $last_end_future = false;
+                if (!empty($last_row['occurrence_end'])) {
+                    try {
+                        $utc = new \DateTimeZone('UTC');
+                        $last_end = Carbon::createFromFormat('Y-m-d H:i:s', $last_row['occurrence_end'], $utc);
+                        $last_end_future = $last_end && $last_end->greaterThanOrEqualTo(Carbon::now($utc));
+                    } catch (Throwable $e) {
+                        // A malformed end date is not evidence that an otherwise-expired event is active.
+                    }
+                }
+                reset($rows);
+
+                if (!$last_end_future) {
+                    $skipped_listing_slugs[(string) $slug] = true;
+                    self::log("⏭️ Skipping stale listing before write (no upcoming occurrences): {$post_title} (Causeway ID: {$causeway_id})");
+                    self::$processed_listings++;
+                    if (self::$processed_listings % 10 === 0 || self::$processed_listings === self::$total_listings) {
+                        self::update_status();
+                    }
+                    continue;
+                }
+
+                self::log("ℹ️ Listing considered active: last occurrence end still in future despite no upcoming start (Causeway ID: {$causeway_id})");
+            }
+
             // Check if post already exists by causeway_id
             $existing = get_posts([
                 'post_type'  => 'listing',
@@ -1360,21 +1453,22 @@ class Causeway_Importer
                     'post_name' => $slug,
                     'post_content' => $description,
                     'post_status'  => $post_status,
-                ]);
+                ], true);
             } else {
                 self::log("Updating existing listing: " . $post_title);
                 // Update post title, slug, and content
-                wp_update_post([
+                $post_id = wp_update_post([
                     'ID'           => $post_id,
                     'post_title'   => $post_title,
                     'post_name'    => $slug,
                     'post_content' => $description,
                     'post_status'  => $post_status,
-                ]);
+                ], true);
             }
 
             if (!$post_id || is_wp_error($post_id)) {
-                self::log("Error creating or updating listing: $post_title");
+                $error_message = is_wp_error($post_id) ? ': ' . $post_id->get_error_message() : '';
+                self::log("❌ Error creating or updating listing: {$post_title}{$error_message}");
                 continue;
             }
 
@@ -1414,10 +1508,10 @@ class Causeway_Importer
             wp_set_object_terms($post_id, [], 'listing-campaigns');
 
             // Assign Taxonomies
-            self::assign_listing_terms($post_id, $item['types'], 'listing-type');
-            self::assign_listing_terms($post_id, $item['categories'], 'listings-category');
-            self::assign_listing_terms($post_id, $item['amenities'], 'listings-amenities');
-            self::assign_listing_terms($post_id, $item['campaigns'], 'listing-campaigns');
+            self::assign_listing_terms($post_id, $item['types'] ?? [], 'listing-type');
+            self::assign_listing_terms($post_id, $item['categories'] ?? [], 'listings-category');
+            self::assign_listing_terms($post_id, $item['amenities'] ?? [], 'listings-amenities');
+            self::assign_listing_terms($post_id, $item['campaigns'] ?? [], 'listing-campaigns');
 
             // Assign Seasons
             wp_set_object_terms($post_id, [], 'listings-seasons');
@@ -1464,65 +1558,10 @@ class Causeway_Importer
             // Set featured image based on attachments (Primary first, else first)
             self::maybe_set_featured_image($post_id, $attachments, $post_title);
 
-            // Dates Repeater
-            $dates = [];
-            foreach ($item['dates'] ?? [] as $date) {
-                $dates[] = [
-                    'start_at' => $date['start_at'] ?? '',
-                    'end_at'   => $date['end_at'] ?? '',
-                    'rrule'    => $date['rrule'] ?? '',
-                ];
-            }
+            // Dates and occurrences were normalized before the post write so stale events
+            // could be rejected without creating throwaway posts.
             update_field('dates', $dates, $post_id);
-
-            // Determine if this listing is an Event (Causeway Type ID = 3)
-            $is_event_type = false;
-            foreach (($item['types'] ?? []) as $type_entry) {
-                if ((int)($type_entry['id'] ?? 0) === 3) {
-                    $is_event_type = true;
-                    break;
-                }
-            }
-
-            // ②  Derive and store occurrences + next upcoming (events get ALL occurrences; non-events limited to current year)
-            [$rows, $next] = self::build_occurrences_for_acf($dates, $is_event_type);
             // self::log_occurrence_debug($post_id, (int) $causeway_id, (string) $slug, $dates, $rows, $next, $is_event_type);
-
-            // if last row in rows end date is in future do not do the skip below
-
-            // If there are occurrences but no upcoming next AND this is an event type, mark listing as stale and skip it
-            // However, if the last occurrence's END time is still in the future, treat it as active (ongoing) and do NOT skip.
-            if ($is_event_type && !empty($rows) && empty($next)) {
-                $last_row = end($rows);
-                $last_end_future = false;
-                if (!empty($last_row['occurrence_end'])) {
-                    try {
-                        $tz = new \DateTimeZone('UTC');
-                        $last_end = Carbon::createFromFormat('Y-m-d H:i:s', $last_row['occurrence_end'], $tz);
-                        if ($last_end && $last_end->greaterThanOrEqualTo(Carbon::now($tz))) {
-                            $last_end_future = true; // ongoing occurrence
-                        }
-                    } catch (\Exception $e) {
-                        // Silently ignore parse errors; will fallback to stale logic
-                    }
-                }
-                // Reset internal array pointer after end() usage (good practice if $rows reused later)
-                reset($rows);
-
-                if (!$last_end_future) {
-                    self::log("⏭️ Skipping stale listing (no upcoming occurrences): {$post_title} (Causeway ID: {$causeway_id}, WP ID: {$post_id})");
-                    // Do NOT add this causeway_id to $imported_ids so delete_old_listings() will purge it
-                    // Proceed to next item after updating progress counters
-                    self::$processed_listings++;
-                    if (self::$processed_listings % 10 === 0 || self::$processed_listings === self::$total_listings) {
-                        self::update_status();
-                    }
-                    // $imported_ids[] = $causeway_id; // NOTE: Existing behavior retained (comment suggests exclusion)
-                    continue;
-                } else {
-                    self::log("ℹ️ Listing considered active: last occurrence end still in future despite no upcoming start (Causeway ID: {$causeway_id}, WP ID: {$post_id})");
-                }
-            }
 
             update_field('all_occurrences', $rows, $post_id);     // repeater
             update_field('next_occurrence',  $next, $post_id);    // single date_time_picker
@@ -1573,6 +1612,8 @@ class Causeway_Importer
                 $related_post_id = self::$listing_map[$related_slug] ?? null;
                 if ($related_post_id) {
                     $related_ids[] = $related_post_id;
+                } elseif (isset($skipped_listing_slugs[$related_slug])) {
+                    self::log("ℹ️ Related listing excluded because it is stale: $related_slug for {$item['slug']}");
                 } else {
                     self::log("⚠️ Related listing not found: $related_slug for {$item['slug']}");
                 }
@@ -1819,13 +1860,16 @@ class Causeway_Importer
                 ]),
             ]);
 
-            $export_success = !is_wp_error($response);
+            $response_code = is_wp_error($response) ? 0 : (int) wp_remote_retrieve_response_code($response);
+            $export_success = !is_wp_error($response) && $response_code >= 200 && $response_code < 300;
 
             if (!$export_success) {
-                self::log('❌ Failed to notify public site. ' . $endpoint);
-                // self::log($response);
+                $reason = is_wp_error($response)
+                    ? $response->get_error_message()
+                    : 'HTTP ' . $response_code;
+                self::log('❌ Failed to notify public site (' . $reason . '). ' . $endpoint);
             } else {
-                self::log('✅ Public site received data at ' . $endpoint);
+                self::log('✅ Public site received data at ' . $endpoint . ' (HTTP ' . $response_code . ')');
             }
 
             /**
