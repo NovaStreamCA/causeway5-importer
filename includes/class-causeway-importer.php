@@ -773,7 +773,7 @@ class Causeway_Importer
 
                 $type_term = self::get_term_by_causeway_id($type_id, 'listing-type');
                 if ($type_term) {
-                    update_field('listing_type', $type_term->term_id, 'listings-category_' . $term_id);
+                    update_field('field_category_type', $type_term->term_id, 'listings-category_' . $term_id);
                 }
 
                 // asd attachments Repeater
@@ -914,7 +914,7 @@ class Causeway_Importer
             // Set ACF relationship to type
             $type_term = self::get_term_by_causeway_id($type_id, 'listing-type');
             if ($type_term) {
-                update_field('listing_type', $type_term->term_id, 'listings-amenities_' . $term_id);
+                update_field('field_amenity_type', $type_term->term_id, 'listings-amenities_' . $term_id);
             }
 
             // The cache may have been primed before this term was inserted.

@@ -571,9 +571,42 @@ function format_related_acf_ids(array $fieldMap, $acf): array
             continue;
         }
 
-        $format_term = function ($term_id) use ($taxonomy) {
+        $normalize_term_id = static function ($value): int {
+            if ($value instanceof WP_Term) {
+                return (int) $value->term_id;
+            }
+
+            if (is_object($value) && isset($value->term_id)) {
+                return (int) $value->term_id;
+            }
+
+            if (is_array($value) && isset($value['term_id'])) {
+                return (int) $value['term_id'];
+            }
+
+            return is_numeric($value) ? (int) $value : 0;
+        };
+
+        $format_term = function ($value) use ($taxonomy, $acfKey, $normalize_term_id) {
+            $term_id = $normalize_term_id($value);
+            if ($term_id <= 0) {
+                error_log(sprintf(
+                    '[Causeway Exporter] Unable to resolve ACF relationship "%s" for taxonomy "%s" from a %s value.',
+                    $acfKey,
+                    $taxonomy,
+                    get_debug_type($value)
+                ));
+                return null;
+            }
+
             $term = get_term($term_id, $taxonomy);
             if (!$term || is_wp_error($term)) {
+                error_log(sprintf(
+                    '[Causeway Exporter] ACF relationship "%s" points to missing %s term ID %d.',
+                    $acfKey,
+                    $taxonomy,
+                    $term_id
+                ));
                 return null;
             }
 
@@ -610,18 +643,20 @@ function format_related_acf_ids(array $fieldMap, $acf): array
             return $base;
         };
 
-        if (is_array($acf[$acfKey])) {
+        $fieldValue = $acf[$acfKey];
+        $isSingleTermArray = is_array($fieldValue) && isset($fieldValue['term_id']);
+
+        if (is_array($fieldValue) && !$isSingleTermArray) {
             $formatted = [];
-            foreach ($acf[$acfKey] as $term_id) {
-                $data = $format_term($term_id);
+            foreach ($fieldValue as $termValue) {
+                $data = $format_term($termValue);
                 if ($data) {
                     $formatted[] = $data;
                 }
             }
             $output[$outputKey] = $formatted;
-        } elseif (is_numeric($acf[$acfKey])) {
-            $term_id = $acf[$acfKey];
-            $data = $format_term($term_id);
+        } else {
+            $data = $format_term($fieldValue);
             if ($data) {
                 $output[$outputKey] = $data;
             }
