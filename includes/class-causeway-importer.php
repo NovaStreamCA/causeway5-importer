@@ -1647,7 +1647,6 @@ class Causeway_Importer
             update_field('highlights', $item['highlights'] ?? '', $post_id);
             update_field('email', $item['email'] ?? '', $post_id);
             update_field('metaline', $item['meta'] ?? '', $post_id);
-            update_field('contact_name', $item['contact_name'] ?? '', $post_id);
             update_field('phone_primary', $item['phone_primary'] ?? '', $post_id);
             update_field('phone_secondary', $item['phone_secondary'] ?? '', $post_id);
             update_field('phone_offseason', $item['phone_offseason'] ?? '', $post_id);

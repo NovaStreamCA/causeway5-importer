@@ -373,7 +373,6 @@ function causeway_register_acf_fields() {
                 ['key' => 'field_is_campaign_only', 'label' => 'Is Campaign Only?', 'name' => 'is_campaign_only', 'type' => 'true_false'],
                 ['key' => 'field_opengraph_title', 'label' => 'OG Title', 'name' => 'opengraph_title', 'type' => 'text'],
                 ['key' => 'field_opengraph_description', 'label' => 'OG Description', 'name' => 'opengraph_description', 'type' => 'textarea'],
-                ['key' => 'field_contact_name', 'label' => 'Contact Name', 'name' => 'contact_name', 'type' => 'text'],
                 ['key' => 'field_activated_at', 'label' => 'Activated At', 'name' => 'activated_at', 'type' => 'date_picker'],
                 ['key' => 'field_expired_at', 'label' => 'Expired At', 'name' => 'expired_at', 'type' => 'date_picker'],
                 [

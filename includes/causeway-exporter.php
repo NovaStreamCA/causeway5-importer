@@ -125,7 +125,6 @@ function get_listings($request)
             'slug'           => $post->post_name,
             'description'    => html_entity_decode(apply_filters('the_content', $post->post_content)),
             'highlights'     => html_entity_decode($acf['highlights']) ?? null,
-            'contact_name'   => $acf['contact_name'] ?? null,
             'phone_primary'  => $acf['phone_primary'] ?? null,
             'phone_secondary' => $acf['phone_secondary'] ?? null,
             'phone_offseason' => $acf['phone_offseason'] ?? null,

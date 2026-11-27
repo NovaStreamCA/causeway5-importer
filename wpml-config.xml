@@ -45,7 +45,6 @@
     <custom-field action="copy">phone_offseason</custom-field>
     <custom-field action="copy">phone_tollfree</custom-field>
     <custom-field action="copy">price</custom-field>
-    <custom-field action="copy">contact_name</custom-field>
     <custom-field action="copy">activated_at</custom-field>
     <custom-field action="copy">expired_at</custom-field>
     <custom-field action="copy">websites</custom-field>
